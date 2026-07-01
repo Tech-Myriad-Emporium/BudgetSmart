@@ -1,0 +1,35 @@
+# BudgetSmart central account + entitlement API (Cloudflare Worker + D1).
+# The authority for identity, email verification, and subscription state.
+# Both the marketing site and the desktop app talk to this.
+name = "budgetsmart-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "budgetsmart-accounts"
+database_id = "af51f705-52ec-46b1-8a7e-e5ee2c154034"
+
+# Serve downloads (installer) via the R2 binding — R2's public HTTP serving was
+# unreliable on this account, but the binding uses the working data plane.
+[[r2_buckets]]
+binding = "DOWNLOADS"
+bucket_name = "budgetsmart-downloads"
+
+[vars]
+APP_URL = "https://budgetsmarttme.com"
+API_ORIGIN = "https://budgetsmart-api.budgetsmart.workers.dev"
+EMAIL_FROM = "BudgetSmart <budgetsmart.techmyriademporium@gmail.com>"
+GMAIL_USER = "budgetsmart.techmyriademporium@gmail.com"
+# Stripe price ids (test mode)
+STRIPE_PRICE_BASE = "price_1ToQnu0dUdkblRR7FHYcLXkk"
+STRIPE_PRICE_IND_T1 = "price_1ToQnv0dUdkblRR7DfteaHcD"
+STRIPE_PRICE_IND_T2 = "price_1ToQnv0dUdkblRR7N8j1zpHC"
+STRIPE_PRICE_IND_T3 = "price_1ToQnv0dUdkblRR7ExjzggWF"
+STRIPE_PRICE_FAM_T1 = "price_1ToQnv0dUdkblRR7dohnJgjk"
+STRIPE_PRICE_FAM_T2 = "price_1ToQnv0dUdkblRR7s3Yzug1B"
+STRIPE_PRICE_FAM_T3 = "price_1ToQnw0dUdkblRR7CBdM6j0D"
+# Secrets (wrangler secret put): GMAIL_APP_PASSWORD, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+# Stripe price ids are set as vars once the products exist (see scripts/stripe-setup).
+# Secrets (wrangler secret put): JWT_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY

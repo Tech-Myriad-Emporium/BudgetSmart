@@ -1,0 +1,56 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# packaged desktop output (huge — ship via GitHub Releases, not git)
+dist-exe/
+app-resources/
+*.exe
+
+# keep the desktop app icon source assets (build/ is ignored above)
+!apps/desktop/build/
+!apps/desktop/build/icon.png
+!apps/desktop/build/icon.ico
+
+# env
+.env
+.env.local
+.env.*.local
+
+# database (node:sqlite)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+backend/data/
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / os
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# cloudflare / wrangler local state + secrets
+.wrangler/
+.dev.vars
+**/whsec.txt
+prices.json
+
+# misc
+coverage/
+.turbo/
+.cache/

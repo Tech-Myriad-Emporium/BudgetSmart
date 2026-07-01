@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "BudgetSmart",
+    "slug": "budgetsmart",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "primaryColor": "#00FF41",
+    "splash": {
+      "backgroundColor": "#000000",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.budgetsmart.app"
+    },
+    "android": {
+      "package": "com.budgetsmart.app",
+      "adaptiveIcon": { "backgroundColor": "#000000" }
+    }
+  }
+}

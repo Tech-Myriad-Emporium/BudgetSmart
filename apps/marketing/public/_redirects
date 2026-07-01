@@ -1,0 +1,2 @@
+# SPA fallback: serve the app for any unknown path (keeps deep links working).
+/*  /index.html  200

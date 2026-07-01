@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#000000"/>
+  <rect x="20" y="20" width="1160" height="590" rx="20" fill="none" stroke="#1C1C1C" stroke-width="2"/>
+  <!-- brand -->
+  <g transform="translate(80,80)">
+    <rect width="56" height="56" rx="12" fill="none" stroke="#00FF41" stroke-width="3"/>
+    <text x="28" y="40" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="32" font-weight="600" fill="#00FF41">$</text>
+    <text x="76" y="38" font-family="'JetBrains Mono', monospace" font-size="30" font-weight="600" fill="#FFFFFF">Budget<tspan fill="#00FF41">Smart</tspan></text>
+  </g>
+  <!-- headline -->
+  <text x="80" y="320" font-family="Inter, sans-serif" font-size="92" font-weight="600" fill="#FFFFFF" letter-spacing="-2">Master your money.</text>
+  <text x="80" y="420" font-family="Inter, sans-serif" font-size="92" font-weight="600" fill="#00FF41" letter-spacing="-2">Cyber-clean.</text>
+  <!-- sub -->
+  <text x="80" y="500" font-family="Inter, sans-serif" font-size="30" fill="#9CA3AF">Budgets · Goals · Debt payoff · Investing · Net worth · Family</text>
+  <!-- platforms -->
+  <text x="80" y="560" font-family="'JetBrains Mono', monospace" font-size="22" fill="#5A5A5A">iOS · Android · macOS · Windows — free to start · budgetsmarttme.com</text>
+</svg>

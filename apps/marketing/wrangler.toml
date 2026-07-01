@@ -1,0 +1,4 @@
+# Cloudflare Pages config for direct `wrangler pages deploy` from this folder.
+name = "budgetsmart"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
