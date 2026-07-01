@@ -1,0 +1,50 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npm --prefix shared install --no-audit --no-fund
+          npm run build:shared
+          npm --prefix backend install --no-audit --no-fund
+          npm --prefix apps/web install --no-audit --no-fund
+          npm run link:shared
+          npm --prefix apps/desktop install --no-audit --no-fund
+
+      - name: Build backend + web
+        run: |
+          npm --prefix backend run build
+          npm --prefix apps/web run build
+
+      - name: Stage app resources (bundles the Linux Node runtime)
+        run: |
+          cd apps/desktop
+          node stage.mjs
+          chmod +x app-resources/node
+
+      - name: Build Linux packages (AppImage + deb)
+        run: cd apps/desktop && npx electron-builder --linux --config electron-builder.yml
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgetsmart-linux
+          path: |
+            apps/desktop/dist-eb/*.AppImage
+            apps/desktop/dist-eb/*.deb
+          if-no-files-found: error

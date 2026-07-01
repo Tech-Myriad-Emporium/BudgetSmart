@@ -11,11 +11,13 @@
     "icon": "node make-icon.mjs",
     "stage": "node stage.mjs",
     "package": "node pack-manual.mjs",
-    "dist": "npm run stage && npm run package"
+    "dist": "npm run stage && npm run package",
+    "dist:linux": "npm run stage && electron-builder --linux --config electron-builder.yml"
   },
   "devDependencies": {
     "@electron/packager": "^18.3.6",
     "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "jimp": "^0.22.12",
     "resedit": "^3.0.2",
     "to-ico": "^1.1.5"

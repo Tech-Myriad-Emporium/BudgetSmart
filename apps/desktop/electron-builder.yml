@@ -1,0 +1,25 @@
+# electron-builder config — used in CI (clean Linux runner) to produce the
+# Linux AppImage/.deb. The local Windows build still uses pack-manual + NSIS.
+appId: com.techmyriademporium.budgetsmart
+productName: BudgetSmart
+directories:
+  output: dist-eb
+  buildResources: build
+# The app itself is just the Electron shell; the backend + web + bundled Node
+# runtime ride along as extraResources (staged by stage.mjs before this runs).
+files:
+  - electron.js
+  - preload.js
+  - icon.png
+  - package.json
+extraResources:
+  - from: app-resources
+    to: app-resources
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Finance
+  icon: build/icon.png
+  maintainer: Tech Myriad Emporium <jaydenrobinson727@gmail.com>
+  synopsis: All-in-one personal finance app

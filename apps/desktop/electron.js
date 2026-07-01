@@ -37,7 +37,10 @@ let stderrTail = ""; // last chunk of backend stderr, surfaced in the error dial
 let backendExit = null; // { code, signal } once the child exits
 let spawnError = null; // populated if spawn itself failed
 
-const resourcesBase = path.join(__dirname, "app-resources");
+// app-resources lives next to electron.js in the manual Windows pack
+// (resources/app/app-resources) but under process.resourcesPath when packaged
+// with electron-builder (Linux). Support both.
+const resourcesBase = [path.join(__dirname, "app-resources"), path.join(process.resourcesPath || "", "app-resources")].find((p) => existsSync(p)) || path.join(__dirname, "app-resources");
 const backendEntry = path.join(resourcesBase, "server", "dist", "index.js");
 const webDist = path.join(resourcesBase, "web");
 
