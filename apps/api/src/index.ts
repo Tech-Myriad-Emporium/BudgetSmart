@@ -217,6 +217,7 @@ app.post("/auth/register", async (c) => {
     .run();
 
   await createAndSendVerification(c.env, user);
+  await notify(c.env, user.id, "welcome", "Welcome to BudgetSmart 🎉", "Your account is ready. Verify your email, then choose a plan and connect the app.");
   return c.json({ ok: true, needsVerification: true });
 });
 
@@ -322,6 +323,29 @@ app.get("/avatar/:userId", async (c) => {
   headers.set("Cache-Control", "public, max-age=300");
   if (!headers.get("Content-Type")) headers.set("Content-Type", "image/png");
   return new Response(obj.body, { status: 200, headers });
+});
+
+/* ------------------------------------------------------------------ *
+ * Notifications
+ * ------------------------------------------------------------------ */
+async function notify(env: Env, userId: string, type: string, title: string, body?: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO notifications (id,user_id,type,title,body,read,created_at) VALUES (?,?,?,?,?,0,?)")
+    .bind(newId(), userId, type, title, body ?? null, now())
+    .run();
+}
+
+app.get("/notifications", auth, async (c) => {
+  const rows = (
+    await c.env.DB.prepare("SELECT id,type,title,body,read,created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50")
+      .bind(c.get("userId"))
+      .all<{ read: number }>()
+  ).results;
+  return c.json({ notifications: rows, unread: rows.filter((r) => r.read === 0).length });
+});
+
+app.post("/notifications/read-all", auth, async (c) => {
+  await c.env.DB.prepare("UPDATE notifications SET read = 1 WHERE user_id = ?").bind(c.get("userId")).run();
+  return c.json({ ok: true });
 });
 
 /** The endpoint the desktop app polls on reload to sync its tier. */
@@ -449,6 +473,7 @@ async function handleEvent(env: Env, event: { type: string; data: { object: any 
           status: sub.status,
           periodEnd: sub.current_period_end,
         });
+        await notify(env, userId, "billing", "Subscription active ✅", "Thanks for subscribing! Open the app and reload to unlock your plan.");
       } else {
         // one-time (Base app)
         await setEntitlement(env, userId, { tier: obj.metadata?.tierId || "base", customerId, status: "active" });

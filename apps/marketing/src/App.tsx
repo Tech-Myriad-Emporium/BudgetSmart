@@ -63,6 +63,8 @@ function Nav() {
         <a href="#pricing">Pricing</a>
         <a href="#download">Download</a>
         <a href="#status">Status</a>
+        <a className="btn nav-icon-btn" href="/account?tab=notifications" title="Notifications" aria-label="Notifications">🔔</a>
+        <a className="btn" href="/account" style={{ padding: "8px 16px" }}>Account</a>
         <a className="btn btn-primary" href="#download" style={{ padding: "8px 16px" }}>
           Get the app →
         </a>

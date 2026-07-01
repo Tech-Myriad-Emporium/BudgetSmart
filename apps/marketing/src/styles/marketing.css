@@ -559,6 +559,21 @@ section {
   color: #00ff41;
 }
 
+/* ---------- nav account + notifications buttons ---------- */
+.nav-icon-btn { padding: 8px 11px; font-size: 15px; line-height: 1; }
+
+/* ---------- notifications ---------- */
+.acct-badge {
+  display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 4px; border-radius: 999px;
+  background: #00ff41; color: #000; font-size: 11px; font-weight: 700; text-align: center;
+}
+.acct-notif-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.acct-notif { padding: 12px 14px; border-radius: 8px; border: 1px solid #1c1c1c; }
+.acct-notif.unread { border-color: #00ff41; background: #00ff4108; }
+.acct-notif-title { font-size: 14px; font-weight: 600; }
+.acct-notif-body { font-size: 13px; color: #9a9a9a; margin-top: 3px; }
+.acct-notif-time { font-size: 11px; color: #6a6a6a; margin-top: 6px; }
+
 /* ---------- account / billing pages ---------- */
 .acct-wrap {
   max-width: 720px;

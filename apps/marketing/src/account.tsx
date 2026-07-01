@@ -118,6 +118,47 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   );
 }
 
+interface Notif { id: string; type: string; title: string; body: string | null; read: number; created_at: string; }
+
+function Notifications() {
+  const [items, setItems] = useState<Notif[]>([]);
+  const [unread, setUnread] = useState(0);
+
+  async function load() {
+    const r = await api<{ notifications: Notif[]; unread: number }>("/notifications");
+    if (r.ok) { setItems(r.data.notifications); setUnread(r.data.unread); }
+  }
+  useEffect(() => {
+    load();
+    if (new URLSearchParams(window.location.search).get("tab") === "notifications") {
+      setTimeout(() => document.getElementById("notifications")?.scrollIntoView({ behavior: "smooth" }), 200);
+    }
+  }, []);
+  async function markAll() { await api("/notifications/read-all", { method: "POST" }); load(); }
+
+  return (
+    <div className="acct-card" id="notifications">
+      <div className="acct-row">
+        <div className="acct-muted">🔔 Notifications {unread > 0 && <span className="acct-badge">{unread}</span>}</div>
+        {unread > 0 && <button className="btn acct-ghost" onClick={markAll}>Mark all read</button>}
+      </div>
+      {items.length === 0 ? (
+        <p className="acct-muted" style={{ marginTop: 10 }}>No notifications yet.</p>
+      ) : (
+        <div className="acct-notif-list">
+          {items.map((n) => (
+            <div className={`acct-notif ${n.read ? "" : "unread"}`} key={n.id}>
+              <div className="acct-notif-title">{n.title}</div>
+              {n.body && <div className="acct-notif-body">{n.body}</div>}
+              <div className="acct-notif-time">{new Date(n.created_at).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileEditor({ account, onChange }: { account: Account; onChange: () => void }) {
   const [name, setName] = useState(account.name);
   const [birthday, setBirthday] = useState(account.birthday ?? "");
@@ -219,6 +260,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
       </div>
 
       <ProfileEditor account={account} onChange={onChange} />
+      <Notifications />
 
 
       <div className="acct-billing-toggle">
