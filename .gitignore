@@ -44,6 +44,10 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# android / gradle build state
+.gradle/
+apps/web/android/local.properties
+
 # cloudflare / wrangler local state + secrets
 .wrangler/
 .dev.vars

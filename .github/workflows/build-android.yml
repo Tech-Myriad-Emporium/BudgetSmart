@@ -1,0 +1,46 @@
+name: Build Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies + build web
+        run: |
+          npm install --no-audit --no-fund
+          npm --prefix shared install --no-audit --no-fund
+          npm run build:shared
+          npm --prefix apps/web install --no-audit --no-fund
+          npm run link:shared
+          npm --prefix apps/web run build
+
+      - name: Capacitor sync (copy web assets into the Android project)
+        run: cd apps/web && npx cap sync android
+
+      - name: Build debug APK
+        run: cd apps/web/android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgetsmart-android
+          path: apps/web/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
