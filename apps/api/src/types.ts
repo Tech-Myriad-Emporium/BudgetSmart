@@ -14,14 +14,19 @@ export interface Env {
   APP_URL: string;
   EMAIL_FROM: string;
   API_ORIGIN: string; // this Worker's public origin (workers.dev or api.budgetsmarttme.com)
-  // Stripe price ids (vars, set after products are created)
-  STRIPE_PRICE_BASE?: string;
-  STRIPE_PRICE_IND_T1?: string;
-  STRIPE_PRICE_IND_T2?: string;
-  STRIPE_PRICE_IND_T3?: string;
-  STRIPE_PRICE_FAM_T1?: string;
-  STRIPE_PRICE_FAM_T2?: string;
-  STRIPE_PRICE_FAM_T3?: string;
+  // Stripe price ids (vars) — monthly + annual per subscription tier
+  STRIPE_PRICE_IND_T1_MONTH?: string;
+  STRIPE_PRICE_IND_T1_YEAR?: string;
+  STRIPE_PRICE_IND_T2_MONTH?: string;
+  STRIPE_PRICE_IND_T2_YEAR?: string;
+  STRIPE_PRICE_IND_T3_MONTH?: string;
+  STRIPE_PRICE_IND_T3_YEAR?: string;
+  STRIPE_PRICE_FAM_T1_MONTH?: string;
+  STRIPE_PRICE_FAM_T1_YEAR?: string;
+  STRIPE_PRICE_FAM_T2_MONTH?: string;
+  STRIPE_PRICE_FAM_T2_YEAR?: string;
+  STRIPE_PRICE_FAM_T3_MONTH?: string;
+  STRIPE_PRICE_FAM_T3_YEAR?: string;
 }
 
 export interface UserRow {

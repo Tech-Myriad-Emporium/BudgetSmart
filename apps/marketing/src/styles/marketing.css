@@ -630,6 +630,11 @@ section {
 .acct-plan-name { font-weight: 600; }
 .acct-plan-price { font-size: 22px; font-weight: 700; }
 .acct-plan-price span { font-size: 12px; color: #7a7a7a; font-weight: 400; margin-left: 4px; }
+.acct-plan-tag { font-size: 12px; color: #9a9a9a; line-height: 1.4; }
+.acct-billing-toggle { display: inline-flex; gap: 4px; padding: 4px; background: #0b0b0b; border: 1px solid #1c1c1c; border-radius: 10px; }
+.acct-billing-toggle button { padding: 8px 18px; background: transparent; border: none; color: #9a9a9a; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.acct-billing-toggle button.on { background: #00ff41; color: #000; font-weight: 600; }
+.acct-save { font-size: 11px; opacity: 0.8; }
 @media (max-width: 620px) {
   .acct-grid { grid-template-columns: 1fr; }
 }

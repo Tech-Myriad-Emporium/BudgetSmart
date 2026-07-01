@@ -4,7 +4,7 @@ import { sign, verify } from "hono/jwt";
 import { hashPassword, verifyPassword, randomToken, newId } from "./crypto.js";
 import { sendVerificationEmail } from "./email.js";
 import { stripe, verifyStripeSignature } from "./stripe.js";
-import { checkoutMode, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
+import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
 import type { AccountView, Env, UserRow } from "./types.js";
 
 type Vars = { userId: string };
@@ -283,24 +283,24 @@ app.post("/billing/checkout", auth, async (c) => {
   if (!user) return c.json({ error: "Not found" }, 404);
   const body = await c.req.json().catch(() => ({}));
   const tierId = String(body.tierId ?? "");
+  const interval = isInterval(String(body.interval ?? "month")) ? (String(body.interval ?? "month") as "month" | "year") : "month";
   if (!isValidTier(tierId)) return c.json({ error: "Unknown plan" }, 400);
   if (tierId === "base") return c.json({ error: "The Base plan is free — no checkout needed." }, 400);
-  const price = priceIdForTier(c.env, tierId);
+  const price = priceIdForTier(c.env, tierId, interval);
   if (!price) return c.json({ error: "Billing isn't configured for this plan yet." }, 503);
 
   const session = await stripe<{ url: string; id: string }>(c.env, "checkout/sessions", "POST", {
-    mode: checkoutMode(tierId),
+    mode: "subscription",
     "line_items[0][price]": price,
     "line_items[0][quantity]": 1,
     client_reference_id: user.id,
     ...(user.stripe_customer_id ? { customer: user.stripe_customer_id } : { customer_email: user.email }),
     "metadata[userId]": user.id,
     "metadata[tierId]": tierId,
-    ...(checkoutMode(tierId) === "subscription"
-      ? { "subscription_data[metadata][userId]": user.id, "subscription_data[metadata][tierId]": tierId }
-      : {}),
+    "subscription_data[metadata][userId]": user.id,
+    "subscription_data[metadata][tierId]": tierId,
     success_url: `${new URL(c.env.APP_URL).origin}/account?checkout=success`,
-    cancel_url: `${new URL(c.env.APP_URL).origin}/pricing?checkout=cancel`,
+    cancel_url: `${new URL(c.env.APP_URL).origin}/account?checkout=cancel`,
   });
   return c.json({ url: session.url });
 });

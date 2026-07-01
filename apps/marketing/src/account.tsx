@@ -6,14 +6,15 @@ import { useEffect, useState } from "react";
 const API = "https://budgetsmart-api.budgetsmart.workers.dev";
 const TOKEN_KEY = "bs_token";
 
+type Billing = "month" | "year";
 const TIERS = [
-  { id: "base", name: "Base App", price: "Free", cadence: "", group: "Own it once" },
-  { id: "ind_t1", name: "Tier 1", price: "$4.99", cadence: "/mo", group: "Individual" },
-  { id: "ind_t2", name: "Tier 2", price: "$8.99", cadence: "/mo", group: "Individual" },
-  { id: "ind_t3", name: "Tier 3", price: "$12.99", cadence: "/mo", group: "Individual" },
-  { id: "fam_t1", name: "Family T1", price: "$9.99", cadence: "/mo", group: "Family" },
-  { id: "fam_t2", name: "Family T2", price: "$12.99", cadence: "/mo", group: "Family" },
-  { id: "fam_t3", name: "Family T3", price: "$14.99", cadence: "/mo", group: "Family" },
+  { id: "base", name: "Base App", group: "Own it once", month: "Free", year: "Free", tagline: "Manual, private, offline." },
+  { id: "ind_t1", name: "Tier 1", group: "Individual", month: "$5", year: "$44.99", tagline: "Saves $300–$800/yr in accidental waste." },
+  { id: "ind_t2", name: "Tier 2", group: "Individual", month: "$9", year: "$79.99", tagline: "Saves $1,000–$3,000/yr through optimization." },
+  { id: "ind_t3", name: "Tier 3", group: "Individual", month: "$13", year: "$114.99", tagline: "Replaces a tax advisor + planner — save $2k–$10k/yr." },
+  { id: "fam_t1", name: "Family T1", group: "Family (5)", month: "$12.99", year: "$119.99", tagline: "Shared budgets, goals & kid accounts." },
+  { id: "fam_t2", name: "Family T2", group: "Family (5)", month: "$22.99", year: "$199.99", tagline: "Approvals, His/Hers/Ours & allowances." },
+  { id: "fam_t3", name: "Family T3", group: "Family (5)", month: "$32.99", year: "$299.99", tagline: "Gamified, partner forecasting & advisor portal." },
 ];
 
 interface Account {
@@ -105,10 +106,11 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [billing, setBilling] = useState<Billing>("year");
 
   async function buy(tierId: string) {
     setBusy(tierId); setErr(null);
-    const r = await api<{ url: string }>("/billing/checkout", { method: "POST", body: JSON.stringify({ tierId }) });
+    const r = await api<{ url: string }>("/billing/checkout", { method: "POST", body: JSON.stringify({ tierId, interval: billing }) });
     if (r.ok && r.data.url) window.location.href = r.data.url;
     else { setErr(r.data.error ?? "Checkout unavailable."); setBusy(null); }
   }
@@ -146,25 +148,37 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
         </p>
       </div>
 
-      {["Own it once", "Individual", "Family"].map((group) => (
+      <div className="acct-billing-toggle">
+        <button className={billing === "month" ? "on" : ""} onClick={() => setBilling("month")}>Monthly</button>
+        <button className={billing === "year" ? "on" : ""} onClick={() => setBilling("year")}>
+          Yearly <span className="acct-save">save ~25%</span>
+        </button>
+      </div>
+
+      {["Own it once", "Individual", "Family (5)"].map((group) => (
         <div key={group}>
           <div className="acct-group">{group}</div>
           <div className="acct-grid">
-            {TIERS.filter((t) => t.group === group).map((t) => (
-              <div className="acct-plan" key={t.id}>
-                <div className="acct-plan-name">{t.name}</div>
-                <div className="acct-plan-price">{t.price}<span>{t.cadence}</span></div>
-                {account.tier === t.id ? (
-                  <button className="btn acct-block" disabled>Current plan</button>
-                ) : t.id === "base" ? (
-                  <button className="btn acct-block" disabled>Free — included</button>
-                ) : (
-                  <button className="btn btn-primary acct-block" onClick={() => buy(t.id)} disabled={busy === t.id}>
-                    {busy === t.id ? "…" : "Subscribe"}
-                  </button>
-                )}
-              </div>
-            ))}
+            {TIERS.filter((t) => t.group === group).map((t) => {
+              const price = billing === "year" ? t.year : t.month;
+              const cadence = t.id === "base" ? "" : billing === "year" ? "/yr" : "/mo";
+              return (
+                <div className="acct-plan" key={t.id}>
+                  <div className="acct-plan-name">{t.name}</div>
+                  <div className="acct-plan-price">{price}<span>{cadence}</span></div>
+                  <div className="acct-plan-tag">{t.tagline}</div>
+                  {account.tier === t.id ? (
+                    <button className="btn acct-block" disabled>Current plan</button>
+                  ) : t.id === "base" ? (
+                    <button className="btn acct-block" disabled>Free — included</button>
+                  ) : (
+                    <button className="btn btn-primary acct-block" onClick={() => buy(t.id)} disabled={busy === t.id}>
+                      {busy === t.id ? "…" : "Subscribe"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}

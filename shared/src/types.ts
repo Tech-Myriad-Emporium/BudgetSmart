@@ -628,8 +628,10 @@ export interface Tier {
   id: string;
   name: string;
   group: TierGroup;
-  /** Price in cents (per `interval`). */
+  /** Monthly price in cents (per `interval`). */
   priceCents: Cents;
+  /** Annual price in cents (subscription tiers only). Undefined for Base. */
+  annualPriceCents?: Cents;
   /** "once" = one-time purchase (Base app); "month" = recurring subscription. */
   interval: "month" | "once";
   /** Max members on the plan (1 for base/individual, up to 5 for family). */
