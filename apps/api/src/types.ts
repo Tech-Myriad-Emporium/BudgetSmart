@@ -42,9 +42,16 @@ export interface UserRow {
   current_period_end: number | null;
   created_at: string;
   updated_at: string;
+  birthday: string | null;
+  avatar_key: string | null;
+  locale: string | null;
+  theme: string | null;
+  location: string | null;
+  totp_secret: string | null;
+  totp_enabled: number;
 }
 
-/** Shape returned to clients (never leaks the password hash). */
+/** Shape returned to clients (never leaks the password hash or TOTP secret). */
 export interface AccountView {
   id: string;
   email: string;
@@ -53,4 +60,10 @@ export interface AccountView {
   tier: string;
   subscriptionStatus: string | null;
   currentPeriodEnd: number | null;
+  birthday: string | null;
+  avatarUrl: string | null;
+  locale: string;
+  theme: string;
+  location: string | null;
+  twoFactorEnabled: boolean;
 }

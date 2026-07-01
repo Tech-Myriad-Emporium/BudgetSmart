@@ -20,7 +20,7 @@ const now = () => new Date().toISOString();
 const unix = () => Math.floor(Date.now() / 1000);
 const normEmail = (e: string) => e.trim().toLowerCase();
 
-function view(u: UserRow): AccountView {
+function view(u: UserRow, env: Env): AccountView {
   return {
     id: u.id,
     email: u.email,
@@ -29,6 +29,12 @@ function view(u: UserRow): AccountView {
     tier: u.tier,
     subscriptionStatus: u.subscription_status,
     currentPeriodEnd: u.current_period_end,
+    birthday: u.birthday ?? null,
+    avatarUrl: u.avatar_key ? `${env.API_ORIGIN}/avatar/${u.id}?v=${encodeURIComponent(u.updated_at)}` : null,
+    locale: u.locale ?? "en",
+    theme: u.theme ?? "dark",
+    location: u.location ?? null,
+    twoFactorEnabled: u.totp_enabled === 1,
   };
 }
 
@@ -196,6 +202,13 @@ app.post("/auth/register", async (c) => {
     current_period_end: null,
     created_at: now(),
     updated_at: now(),
+    birthday: null,
+    avatar_key: null,
+    locale: "en",
+    theme: "dark",
+    location: null,
+    totp_secret: null,
+    totp_enabled: 0,
   };
   await c.env.DB.prepare(
     "INSERT INTO users (id,email,password_hash,name,email_verified,tier,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -252,13 +265,63 @@ app.post("/auth/login", async (c) => {
     return c.json({ error: "Please verify your email — we've sent a new link.", code: "email_unverified" }, 403);
   }
   const token = await issueToken(c.env, user);
-  return c.json({ token, account: view(user) });
+  return c.json({ token, account: view(user, c.env) });
 });
 
 app.get("/me", auth, async (c) => {
   const user = await getUserById(c.env, c.get("userId"));
   if (!user) return c.json({ error: "Not found" }, 404);
-  return c.json({ account: view(user) });
+  return c.json({ account: view(user, c.env) });
+});
+
+/** Update editable profile fields (name, birthday, location, locale, theme). */
+app.post("/account/profile", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  const put = (col: string, val: unknown, max = 200) => {
+    if (typeof val === "string") { sets.push(`${col} = ?`); vals.push(val.trim().slice(0, max)); }
+  };
+  put("name", body.name, 80);
+  put("birthday", body.birthday, 10);
+  put("location", body.location, 120);
+  put("locale", body.locale, 10);
+  put("theme", body.theme, 10);
+  if (sets.length) {
+    sets.push("updated_at = ?");
+    vals.push(now(), user.id);
+    await c.env.DB.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).bind(...vals).run();
+  }
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ account: view(updated!, c.env) });
+});
+
+/** Upload a profile picture (PNG/JPEG/WebP data URL, ≤2MB) → R2. */
+app.post("/account/avatar", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const m = String(body.data ?? "").match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/);
+  if (!m) return c.json({ error: "Send a PNG, JPEG or WebP image" }, 400);
+  const bytes = Uint8Array.from(atob(m[2]!), (ch) => ch.charCodeAt(0));
+  if (bytes.length > 2_000_000) return c.json({ error: "Image too large (max 2MB)" }, 400);
+  await c.env.DOWNLOADS.put(`avatars/${user.id}`, bytes, { httpMetadata: { contentType: m[1] } });
+  await c.env.DB.prepare("UPDATE users SET avatar_key = ?, updated_at = ? WHERE id = ?").bind(`avatars/${user.id}`, now(), user.id).run();
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ account: view(updated!, c.env) });
+});
+
+/** Public avatar image. */
+app.get("/avatar/:userId", async (c) => {
+  const obj = await c.env.DOWNLOADS.get(`avatars/${c.req.param("userId")}`);
+  if (!obj) return c.json({ error: "Not found" }, 404);
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set("Cache-Control", "public, max-age=300");
+  if (!headers.get("Content-Type")) headers.set("Content-Type", "image/png");
+  return new Response(obj.body, { status: 200, headers });
 });
 
 /** The endpoint the desktop app polls on reload to sync its tier. */

@@ -1,7 +1,7 @@
 // Account + billing hub for budgetsmarttme.com. Talks to the central Worker API
 // (register, email verification, login, Stripe checkout/portal). This is where a
 // user buys/manages a subscription on the web; the desktop app then syncs it.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API = "https://budgetsmart-api.budgetsmart.workers.dev";
 const TOKEN_KEY = "bs_token";
@@ -24,6 +24,18 @@ interface Account {
   emailVerified: boolean;
   tier: string;
   subscriptionStatus: string | null;
+  birthday: string | null;
+  avatarUrl: string | null;
+  locale: string;
+  theme: string;
+  location: string | null;
+  twoFactorEnabled: boolean;
+}
+
+/** Apply the chosen theme to the document (persisted per account + locally). */
+function applyTheme(theme: string) {
+  document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+  try { localStorage.setItem("bs_theme", theme); } catch { /* ignore */ }
 }
 
 const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -45,11 +57,14 @@ export function AccountPage() {
   async function refresh() {
     if (!getToken()) { setAccount(null); setLoading(false); return; }
     const r = await api<{ account: Account }>("/me");
-    if (r.ok) setAccount(r.data.account);
+    if (r.ok) { setAccount(r.data.account); applyTheme(r.data.account.theme); }
     else { localStorage.removeItem(TOKEN_KEY); setAccount(null); }
     setLoading(false);
   }
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    applyTheme(localStorage.getItem("bs_theme") ?? "dark");
+    refresh();
+  }, []);
 
   return (
     <div className="acct-wrap">
@@ -103,10 +118,64 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   );
 }
 
+function ProfileEditor({ account, onChange }: { account: Account; onChange: () => void }) {
+  const [name, setName] = useState(account.name);
+  const [birthday, setBirthday] = useState(account.birthday ?? "");
+  const [location, setLocation] = useState(account.location ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function save() {
+    setBusy(true); setMsg(null);
+    const r = await api("/account/profile", { method: "POST", body: JSON.stringify({ name, birthday, location }) });
+    setBusy(false);
+    if (r.ok) { setMsg({ kind: "ok", text: "Saved." }); onChange(); } else setMsg({ kind: "err", text: r.data.error ?? "Couldn't save." });
+  }
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    if (file.size > 2_000_000) { setMsg({ kind: "err", text: "Image must be under 2 MB." }); return; }
+    const data = await new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(file); });
+    setBusy(true);
+    const r = await api("/account/avatar", { method: "POST", body: JSON.stringify({ data }) });
+    setBusy(false);
+    if (r.ok) { setMsg({ kind: "ok", text: "Photo updated." }); onChange(); } else setMsg({ kind: "err", text: r.data.error ?? "Upload failed." });
+  }
+
+  const initial = (account.name || account.email).charAt(0).toUpperCase();
+  return (
+    <div className="acct-card">
+      <div className="acct-muted" style={{ marginBottom: 14 }}>Your profile</div>
+      <div className="acct-profile-row">
+        <button className="acct-avatar" onClick={() => fileRef.current?.click()} title="Change photo" type="button">
+          {account.avatarUrl ? <img src={account.avatarUrl} alt="avatar" /> : <span>{initial}</span>}
+          <span className="acct-avatar-edit">✎</span>
+        </button>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onFile} />
+        <div className="acct-profile-fields">
+          <label className="acct-field">Name<input className="acct-input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <div className="acct-two">
+            <label className="acct-field">Birthday<input className="acct-input" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label>
+            <label className="acct-field">Location<input className="acct-input" placeholder="City, Country" value={location} onChange={(e) => setLocation(e.target.value)} /></label>
+          </div>
+        </div>
+      </div>
+      <button className="btn btn-primary acct-block" onClick={save} disabled={busy} style={{ marginTop: 12 }}>{busy ? "…" : "Save profile"}</button>
+      {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [billing, setBilling] = useState<Billing>("year");
+
+  async function toggleTheme() {
+    const next = (localStorage.getItem("bs_theme") ?? account.theme) === "light" ? "dark" : "light";
+    applyTheme(next);
+    await api("/account/profile", { method: "POST", body: JSON.stringify({ theme: next }) });
+  }
 
   async function buy(tierId: string) {
     setBusy(tierId); setErr(null);
@@ -138,6 +207,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
             </div>
           </div>
           <div className="acct-actions">
+            <button className="btn acct-ghost" onClick={toggleTheme} title="Toggle light/dark">🌓 Theme</button>
             <button className="btn" onClick={manage} disabled={busy === "portal"}>Manage billing</button>
             <button className="btn acct-ghost" onClick={logout}>Sign out</button>
           </div>
@@ -147,6 +217,9 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
           After you subscribe, open the desktop app and reload — your plan syncs automatically.
         </p>
       </div>
+
+      <ProfileEditor account={account} onChange={onChange} />
+
 
       <div className="acct-billing-toggle">
         <button className={billing === "month" ? "on" : ""} onClick={() => setBilling("month")}>Monthly</button>

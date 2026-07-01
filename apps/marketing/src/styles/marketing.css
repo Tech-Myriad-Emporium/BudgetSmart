@@ -635,6 +635,36 @@ section {
 .acct-billing-toggle button { padding: 8px 18px; background: transparent; border: none; color: #9a9a9a; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .acct-billing-toggle button.on { background: #00ff41; color: #000; font-weight: 600; }
 .acct-save { font-size: 11px; opacity: 0.8; }
+.acct-profile-row { display: flex; gap: 18px; align-items: flex-start; }
+.acct-avatar {
+  position: relative; width: 72px; height: 72px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid #00ff41; background: #0b0b0b; color: #00ff41; font-size: 28px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; padding: 0;
+}
+.acct-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.acct-avatar-edit {
+  position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 50%;
+  background: #00ff41; color: #000; font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.acct-profile-fields { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.acct-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #9a9a9a; }
+.acct-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.acct-field .acct-input { margin-bottom: 0; }
+@media (max-width: 520px) { .acct-two { grid-template-columns: 1fr; } .acct-profile-row { flex-direction: column; align-items: center; } }
+
+/* ---------- light theme (account pages) ---------- */
+:root[data-theme="light"] body { background: #f6f7f9; color: #1a1a1a; }
+:root[data-theme="light"] .acct-card,
+:root[data-theme="light"] .acct-plan { background: #ffffff; border-color: #e3e6ea; }
+:root[data-theme="light"] .acct-muted,
+:root[data-theme="light"] .acct-field,
+:root[data-theme="light"] .acct-plan-tag { color: #5a6472; }
+:root[data-theme="light"] .acct-input { background: #f6f7f9; border-color: #d5dae1; color: #1a1a1a; }
+:root[data-theme="light"] .acct-tabs button,
+:root[data-theme="light"] .acct-billing-toggle { border-color: #e3e6ea; }
+:root[data-theme="light"] .acct-billing-toggle { background: #eef1f4; }
+:root[data-theme="light"] .acct-plan-price,
+:root[data-theme="light"] .acct-email { color: #1a1a1a; }
 @media (max-width: 620px) {
   .acct-grid { grid-template-columns: 1fr; }
 }
