@@ -205,6 +205,7 @@ function PlanCard({ tier }: { tier: Tier }) {
 const WINDOWS_INSTALLER = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-Setup.exe";
 
 const LINUX_APPIMAGE = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage";
+const ANDROID_APK = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk";
 
 const APT_INSTALL = `curl -fsSL https://budgetsmart-api.budgetsmart.workers.dev/apt/budgetsmart.gpg \\
   | sudo tee /usr/share/keyrings/budgetsmart.gpg > /dev/null
@@ -216,7 +217,7 @@ sudo apt update && sudo apt install budgetsmart`;
 function Downloads() {
   const platforms = [
     { os: "iOS", icon: "", meta: "iPhone & iPad", file: null },
-    { os: "Android", icon: "🤖", meta: "Phones & tablets", file: null },
+    { os: "Android", icon: "🤖", meta: "Android 7+ · APK", file: ANDROID_APK },
     { os: "macOS", icon: "", meta: "Apple silicon & Intel", file: null },
     { os: "Windows", icon: "⊞", meta: "Windows 10 & 11 · ~110 MB", file: WINDOWS_INSTALLER },
     { os: "Linux", icon: "🐧", meta: "AppImage · any distro", file: LINUX_APPIMAGE },
@@ -226,7 +227,7 @@ function Downloads() {
       <div className="wrap">
         <div className="eyebrow">// get the app</div>
         <h2 className="section-title">Download BudgetSmart.</h2>
-        <p className="section-sub">Windows and Linux are available now — mobile and macOS are on the way.</p>
+        <p className="section-sub">Windows, Linux, and Android are available now — iOS and macOS are on the way.</p>
         <div className="dl-grid">
           {platforms.map((p) => (
             <div className="dl" key={p.os}>
@@ -241,6 +242,9 @@ function Downloads() {
             </div>
           ))}
         </div>
+        <p className="section-sub" style={{ fontSize: 13, marginTop: 4 }}>
+          Android is a direct APK — open it and allow “install from unknown sources.” Your financial data stays on your device.
+        </p>
         <div className="apt-box">
           <div className="apt-title">🐧 Install on Debian / Ubuntu via apt</div>
           <pre className="apt-code"><code>{APT_INSTALL}</code></pre>
