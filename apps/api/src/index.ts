@@ -393,4 +393,28 @@ async function handleEvent(env: Env, event: { type: string; data: { object: any 
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * APT repository — serves the Debian package repo from R2 so users can
+ * `sudo apt install budgetsmart`. Files are published under apt/ keys by CI.
+ * ------------------------------------------------------------------ */
+function aptContentType(key: string): string {
+  if (key.endsWith(".deb")) return "application/vnd.debian.binary-package";
+  if (key.endsWith(".gz")) return "application/gzip";
+  if (key.endsWith(".gpg") || key.endsWith(".asc")) return "application/pgp-keys";
+  return "text/plain; charset=utf-8"; // Release, InRelease, Packages
+}
+app.get("/apt/*", async (c) => {
+  const key = c.req.path.replace(/^\/+/, ""); // "apt/dists/stable/Release"
+  const obj = await c.env.DOWNLOADS.get(key);
+  if (!obj) return c.text("Not found", 404);
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set("etag", obj.httpEtag);
+  headers.set("Content-Type", aptContentType(key));
+  // apt indexes must not be served stale; the .deb is immutable per version.
+  headers.set("Cache-Control", key.endsWith(".deb") ? "public, max-age=86400" : "no-cache");
+  headers.set("Content-Length", String(obj.size));
+  return new Response(obj.body, { status: 200, headers });
+});
+
 export default app;

@@ -204,19 +204,29 @@ function PlanCard({ tier }: { tier: Tier }) {
 
 const WINDOWS_INSTALLER = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-Setup.exe";
 
+const LINUX_APPIMAGE = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage";
+
+const APT_INSTALL = `curl -fsSL https://budgetsmart-api.budgetsmart.workers.dev/apt/budgetsmart.gpg \\
+  | sudo tee /usr/share/keyrings/budgetsmart.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/budgetsmart.gpg] \\
+  https://budgetsmart-api.budgetsmart.workers.dev/apt stable main" \\
+  | sudo tee /etc/apt/sources.list.d/budgetsmart.list
+sudo apt update && sudo apt install budgetsmart`;
+
 function Downloads() {
   const platforms = [
     { os: "iOS", icon: "", meta: "iPhone & iPad", file: null },
     { os: "Android", icon: "🤖", meta: "Phones & tablets", file: null },
     { os: "macOS", icon: "", meta: "Apple silicon & Intel", file: null },
-    { os: "Windows", icon: "⊞", meta: "Windows 10 & 11 · ~109 MB", file: WINDOWS_INSTALLER },
+    { os: "Windows", icon: "⊞", meta: "Windows 10 & 11 · ~110 MB", file: WINDOWS_INSTALLER },
+    { os: "Linux", icon: "🐧", meta: "AppImage · any distro", file: LINUX_APPIMAGE },
   ];
   return (
     <section id="download">
       <div className="wrap">
         <div className="eyebrow">// get the app</div>
         <h2 className="section-title">Download BudgetSmart.</h2>
-        <p className="section-sub">The Windows desktop app is available now — mobile and macOS are on the way.</p>
+        <p className="section-sub">Windows and Linux are available now — mobile and macOS are on the way.</p>
         <div className="dl-grid">
           {platforms.map((p) => (
             <div className="dl" key={p.os}>
@@ -230,6 +240,11 @@ function Downloads() {
               )}
             </div>
           ))}
+        </div>
+        <div className="apt-box">
+          <div className="apt-title">🐧 Install on Debian / Ubuntu via apt</div>
+          <pre className="apt-code"><code>{APT_INSTALL}</code></pre>
+          <div className="apt-note">Signed repository — updates arrive through <code>apt upgrade</code>.</div>
         </div>
       </div>
     </section>

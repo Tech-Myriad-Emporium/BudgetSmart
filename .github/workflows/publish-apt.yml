@@ -1,0 +1,77 @@
+name: Publish APT repo
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  apt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils gnupg
+
+      - name: Install project dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npm --prefix shared install --no-audit --no-fund
+          npm run build:shared
+          npm --prefix backend install --no-audit --no-fund
+          npm --prefix apps/web install --no-audit --no-fund
+          npm run link:shared
+          npm --prefix apps/desktop install --no-audit --no-fund
+
+      - name: Build backend + web
+        run: |
+          npm --prefix backend run build
+          npm --prefix apps/web run build
+
+      - name: Stage + build .deb
+        run: |
+          cd apps/desktop
+          node stage.mjs
+          chmod +x app-resources/node
+          npx electron-builder --linux deb --config electron-builder.yml
+
+      - name: Build signed APT repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -e
+          DEB=$(ls apps/desktop/dist-eb/*.deb | head -1)
+          echo "packaging $DEB"
+          REPO=aptrepo
+          mkdir -p "$REPO/pool/main/b/budgetsmart" "$REPO/dists/stable/main/binary-amd64"
+          cp "$DEB" "$REPO/pool/main/b/budgetsmart/"
+          cd "$REPO"
+          dpkg-scanpackages --arch amd64 pool /dev/null > dists/stable/main/binary-amd64/Packages
+          gzip -9 -k -f dists/stable/main/binary-amd64/Packages
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=BudgetSmart \
+            -o APT::FTPArchive::Release::Label=BudgetSmart \
+            -o APT::FTPArchive::Release::Suite=stable \
+            -o APT::FTPArchive::Release::Codename=stable \
+            -o APT::FTPArchive::Release::Components=main \
+            -o APT::FTPArchive::Release::Architectures=amd64 \
+            release dists/stable > dists/stable/Release
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/{print $5; exit}')
+          gpg --batch --yes --pinentry-mode loopback --default-key "$KEYID" --clearsign -o dists/stable/InRelease dists/stable/Release
+          gpg --batch --yes --pinentry-mode loopback --default-key "$KEYID" -abs -o dists/stable/Release.gpg dists/stable/Release
+          gpg --export "$KEYID" > budgetsmart.gpg
+          echo "--- repo tree ---"; find . -type f
+
+      - name: Publish repo to R2
+        env:
+          UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
+        run: |
+          cd aptrepo
+          for f in $(find . -type f | sed 's|^\./||'); do
+            node ../scripts/r2-upload.mjs "$f" "apt/$f"
+          done
