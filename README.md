@@ -28,7 +28,7 @@ budgetsmart/
 ```
 
 Why this stack: **zero native compilation and zero engine downloads.** The database is
-Node's built-in `node:sqlite` writing to a local file — no Prisma, no Docker, no Postgres,
+Node's built-in `node:sqlite` writing to a local file. There is no Prisma, no Docker, no Postgres,
 no `node-gyp`. Each package installs independently and `@budgetsmart/shared` is linked into
 the others via a directory junction (`scripts/link-shared.mjs`), which sidesteps npm's
 unreliable workspace symlinking on Windows.
