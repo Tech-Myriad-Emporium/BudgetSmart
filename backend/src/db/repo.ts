@@ -54,11 +54,19 @@ export const centralLink = {
   get(userId: string): CentralLinkRow | undefined {
     return row<CentralLinkRow>(db.prepare("SELECT * FROM central_link WHERE userId = ?").get(userId));
   },
-  set(input: { userId: string; email: string; token: string; tier: string; status: string | null }): CentralLinkRow {
+  set(input: {
+    userId: string;
+    email: string;
+    token: string;
+    tier: string;
+    status: string | null;
+    centralUserId?: string | null;
+    entToken?: string | null;
+  }): CentralLinkRow {
     db.prepare(
-      `INSERT INTO central_link (userId,email,token,tier,status,syncedAt) VALUES (?,?,?,?,?,?)
-       ON CONFLICT(userId) DO UPDATE SET email=excluded.email, token=excluded.token, tier=excluded.tier, status=excluded.status, syncedAt=excluded.syncedAt`,
-    ).run(input.userId, input.email, input.token, input.tier, p(input.status), nowIso());
+      `INSERT INTO central_link (userId,email,token,tier,status,syncedAt,centralUserId,entToken) VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(userId) DO UPDATE SET email=excluded.email, token=excluded.token, tier=excluded.tier, status=excluded.status, syncedAt=excluded.syncedAt, centralUserId=excluded.centralUserId, entToken=excluded.entToken`,
+    ).run(input.userId, input.email, input.token, input.tier, p(input.status), nowIso(), p(input.centralUserId), p(input.entToken));
     return this.get(input.userId)!;
   },
   clear(userId: string): void {

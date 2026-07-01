@@ -17,6 +17,10 @@ export interface CentralLinkRow {
   tier: string;
   status: string | null;
   syncedAt: string;
+  /** The central account's user id (binds the entitlement token). */
+  centralUserId: string | null;
+  /** Signed entitlement token — the source of truth for the tier. */
+  entToken: string | null;
 }
 
 export interface FamilyMemberRow {

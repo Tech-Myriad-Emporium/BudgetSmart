@@ -57,6 +57,31 @@ async function auth(c: any, next: () => Promise<void>) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Signed entitlement tokens (RS256). The app embeds the public key and
+ * verifies these, so a tier can't be forged by editing the local DB.
+ * ------------------------------------------------------------------ */
+const ENTITLEMENT_TTL_SECONDS = 60 * 60 * 24 * 7; // 7-day offline grace
+let entKeyPromise: Promise<CryptoKey> | null = null;
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function entPrivateKey(env: Env): Promise<CryptoKey> {
+  if (!entKeyPromise) {
+    entKeyPromise = crypto.subtle.importKey("pkcs8", pemToArrayBuffer(env.ENTITLEMENT_PRIVATE_KEY), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  }
+  return entKeyPromise;
+}
+async function signEntitlement(env: Env, userId: string, tier: string): Promise<string> {
+  const key = await entPrivateKey(env);
+  const iat = unix();
+  return sign({ sub: userId, tier, typ: "entitlement", iat, exp: iat + ENTITLEMENT_TTL_SECONDS }, key, "RS256");
+}
+
+/* ------------------------------------------------------------------ *
  * CORS — allow the marketing site (browser). The desktop app calls this
  * from its local backend (server-side, no Origin), which is unaffected.
  * ------------------------------------------------------------------ */
@@ -245,6 +270,8 @@ app.get("/entitlement", auth, async (c) => {
     subscriptionStatus: user.subscription_status,
     currentPeriodEnd: user.current_period_end,
     emailVerified: user.email_verified === 1,
+    // Signed proof of entitlement the app verifies with the embedded public key.
+    token: await signEntitlement(c.env, user.id, user.tier),
   });
 });
 

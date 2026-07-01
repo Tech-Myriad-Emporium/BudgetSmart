@@ -9,6 +9,7 @@ export interface Env {
   GMAIL_USER?: string; // the sending Gmail address
   GMAIL_APP_PASSWORD?: string; // Gmail App Password (secret)
   UPLOAD_TOKEN?: string; // guards the installer upload endpoints (secret)
+  ENTITLEMENT_PRIVATE_KEY: string; // RSA private key (PEM) for signing entitlement tokens
   // vars
   APP_URL: string;
   EMAIL_FROM: string;

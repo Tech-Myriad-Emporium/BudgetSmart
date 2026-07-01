@@ -3,31 +3,33 @@ import { Router } from "express";
 import { z } from "zod";
 import { centralLink, users } from "../../db/repo.js";
 import { central } from "../../lib/central.js";
+import { effectiveTier } from "../../lib/entitlement.js";
 import { ApiError, asyncHandler } from "../../lib/http.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
 
 export const accountRouter = Router();
 accountRouter.use(requireAuth);
 
-/** Apply a central tier to this local user (drives feature gating). */
-function applyTier(userId: string, tier: string) {
-  users.setTier(userId, normalizeTierId(tier));
+/** Cache the verified tier onto the local user row (display only — gating uses effectiveTier). */
+function applyTier(userId: string) {
+  users.setTier(userId, effectiveTier(userId));
 }
 
 function linkState(userId: string) {
   const link = centralLink.get(userId);
   if (!link) return { linked: false as const };
+  const tier = effectiveTier(userId);
   return {
     linked: true as const,
     email: link.email,
-    tier: link.tier,
+    tier,
     status: link.status,
     syncedAt: link.syncedAt,
-    entitlements: resolveEntitlements(link.tier),
+    entitlements: resolveEntitlements(tier),
   };
 }
 
-/** GET /account → whether this device is linked to a web account, and the synced tier. */
+/** GET /account → whether this device is linked to a web account, and the entitled tier. */
 accountRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -37,24 +39,33 @@ accountRouter.get(
 
 const linkSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
-/** POST /account/link → sign into the central account and adopt its tier. */
+/** POST /account/link → sign into the central account and adopt its signed entitlement. */
 accountRouter.post(
   "/link",
   asyncHandler(async (req, res) => {
     const userId = userIdOf(req);
     const { email, password } = linkSchema.parse(req.body);
-    const result = await central.login(email, password);
-    if (!result.ok) {
-      throw new ApiError(result.status === 0 ? 502 : result.status, result.error, { code: result.code });
-    }
-    const { token, account } = result.data;
-    centralLink.set({ userId, email: account.email, token, tier: account.tier, status: account.subscriptionStatus });
-    applyTier(userId, account.tier);
+    const login = await central.login(email, password);
+    if (!login.ok) throw new ApiError(login.status === 0 ? 502 : login.status, login.error, { code: login.code });
+
+    const ent = await central.entitlement(login.data.token);
+    if (!ent.ok) throw new ApiError(ent.status === 0 ? 502 : ent.status, ent.error);
+
+    centralLink.set({
+      userId,
+      email: login.data.account.email,
+      token: login.data.token,
+      tier: normalizeTierId(ent.data.tier),
+      status: ent.data.subscriptionStatus,
+      centralUserId: login.data.account.id,
+      entToken: ent.data.token,
+    });
+    applyTier(userId);
     res.json(linkState(userId));
   }),
 );
 
-/** POST /account/sync → refresh the tier from the central account (called on reload). */
+/** POST /account/sync → refresh the signed entitlement from central (called on reload). */
 accountRouter.post(
   "/sync",
   asyncHandler(async (req, res) => {
@@ -64,17 +75,26 @@ accountRouter.post(
 
     const result = await central.entitlement(link.token);
     if (!result.ok) {
-      // Token expired/invalid → drop the link so the user re-connects; keep offline access at base.
+      // Auth token expired/invalid → drop the link; the (now-stale) entitlement token
+      // will still lock to base once it expires. Prompt re-connect.
       if (result.status === 401) {
         centralLink.clear(userId);
-        applyTier(userId, "base");
+        applyTier(userId);
         return res.json({ linked: false, reauth: true });
       }
-      // Network/transient error → keep the last-known tier, report it.
+      // Offline / transient → keep the last signed token (valid until it expires).
       return res.json({ ...linkState(userId), stale: true, error: result.error });
     }
-    centralLink.set({ userId, email: link.email, token: link.token, tier: result.data.tier, status: result.data.subscriptionStatus });
-    applyTier(userId, result.data.tier);
+    centralLink.set({
+      userId,
+      email: link.email,
+      token: link.token,
+      tier: normalizeTierId(result.data.tier),
+      status: result.data.subscriptionStatus,
+      centralUserId: link.centralUserId,
+      entToken: result.data.token,
+    });
+    applyTier(userId);
     res.json(linkState(userId));
   }),
 );
@@ -85,7 +105,7 @@ accountRouter.post(
   asyncHandler(async (req, res) => {
     const userId = userIdOf(req);
     centralLink.clear(userId);
-    applyTier(userId, "base");
+    applyTier(userId);
     res.json({ linked: false });
   }),
 );

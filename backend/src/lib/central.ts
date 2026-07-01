@@ -19,6 +19,8 @@ export interface CentralEntitlement {
   subscriptionStatus: string | null;
   currentPeriodEnd: number | null;
   emailVerified: boolean;
+  /** Signed entitlement token (RS256) proving the tier. */
+  token: string;
 }
 
 export type CentralResult<T> =

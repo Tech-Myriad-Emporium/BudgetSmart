@@ -192,12 +192,14 @@ CREATE INDEX IF NOT EXISTS idx_family_ledger_member ON family_ledger(memberId);
 -- The central account is the source of truth for the subscription tier; on
 -- reload the app re-syncs the tier from it.
 CREATE TABLE IF NOT EXISTS central_link (
-  userId    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  email     TEXT NOT NULL,
-  token     TEXT NOT NULL,
-  tier      TEXT NOT NULL DEFAULT 'base',
-  status    TEXT,
-  syncedAt  TEXT NOT NULL
+  userId        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  email         TEXT NOT NULL,
+  token         TEXT NOT NULL,
+  tier          TEXT NOT NULL DEFAULT 'base',
+  status        TEXT,
+  syncedAt      TEXT NOT NULL,
+  centralUserId TEXT,
+  entToken      TEXT
 );
 `;
 
@@ -217,6 +219,9 @@ export function initSchema(): void {
   // Remap legacy tier ids to the current plan structure (free/custom were removed).
   db.exec("UPDATE users SET tier = 'base' WHERE tier = 'free'");
   db.exec("UPDATE users SET tier = 'fam_t3' WHERE tier = 'custom'");
+  // Entitlement-token columns for the account link (added after first ship).
+  ensureColumn("central_link", "centralUserId", "centralUserId TEXT");
+  ensureColumn("central_link", "entToken", "entToken TEXT");
 }
 
 initSchema();

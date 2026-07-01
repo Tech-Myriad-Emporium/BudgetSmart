@@ -7,6 +7,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { family, users } from "../../db/repo.js";
+import { effectiveTier } from "../../lib/entitlement.js";
 import { ApiError, asyncHandler, routeParam } from "../../lib/http.js";
 import { serializeFamilyMember } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
@@ -14,11 +15,11 @@ import { requireAuth, userIdOf } from "../../middleware/auth.js";
 export const familyRouter = Router();
 familyRouter.use(requireAuth);
 
-/** Resolve the caller and require a family-capable plan. */
+/** Resolve the caller and require a family-capable plan (verified entitlement). */
 function requireFamilyPlan(userId: string) {
   const user = users.findById(userId);
   if (!user) throw ApiError.unauthorized();
-  const ent = resolveEntitlements(user.tier);
+  const ent = resolveEntitlements(effectiveTier(userId));
   if (!ent.canManageFamily) {
     throw ApiError.forbidden("Family management requires a Family plan");
   }

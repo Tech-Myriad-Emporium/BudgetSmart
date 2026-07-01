@@ -1,9 +1,8 @@
 import { FEATURES, TIERS, resolveEntitlements } from "@budgetsmart/shared";
 import { Router } from "express";
-import { z } from "zod";
 import { users } from "../../db/repo.js";
+import { effectiveTier } from "../../lib/entitlement.js";
 import { ApiError, asyncHandler } from "../../lib/http.js";
-import { serializeUser } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
 
 export const subscriptionRouter = Router();
@@ -17,26 +16,26 @@ subscriptionRouter.get(
   }),
 );
 
-/** GET /subscription → the user's current tier + resolved entitlements. */
+/** GET /subscription → the tier this device is entitled to (verified) + entitlements. */
 subscriptionRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const user = users.findById(userIdOf(req));
-    if (!user) throw ApiError.unauthorized();
-    res.json({ tierId: user.tier, entitlements: resolveEntitlements(user.tier) });
+    const userId = userIdOf(req);
+    if (!users.findById(userId)) throw ApiError.unauthorized();
+    const tierId = effectiveTier(userId);
+    res.json({ tierId, entitlements: resolveEntitlements(tierId) });
   }),
 );
 
-const changeSchema = z.object({ tierId: z.string().min(1) });
-
-/** PUT /subscription → switch plan (no real billing in this slice). */
+/**
+ * PUT /subscription → no longer switches plans locally. The tier is proven by a
+ * signed token from the central account, so plan changes happen on the web.
+ */
 subscriptionRouter.put(
   "/",
-  asyncHandler(async (req, res) => {
-    const userId = userIdOf(req);
-    const { tierId } = changeSchema.parse(req.body);
-    if (!TIERS.some((t) => t.id === tierId)) throw ApiError.badRequest("Unknown plan");
-    const user = users.setTier(userId, tierId);
-    res.json({ tierId: user.tier, entitlements: resolveEntitlements(user.tier), user: serializeUser(user) });
+  asyncHandler(async (_req, _res) => {
+    throw new ApiError(403, "Plans are managed on budgetsmarttme.com — buy or change your plan there, then reload.", {
+      code: "managed_on_web",
+    });
   }),
 );
