@@ -20,6 +20,47 @@ const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, appendFileSync } = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
+
+/* ------------------------------------------------------------------ *
+ * Update check: ask the central API for the latest release; if newer
+ * than this build, offer to open the download. Runs at launch + 6h.
+ * ------------------------------------------------------------------ */
+const UPDATE_URL = "https://budgetsmart-api.budgetsmart.workers.dev/version";
+let updatePromptedFor = null;
+function cmpVersions(a, b) {
+  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+async function checkForUpdates(interactive) {
+  try {
+    const res = await fetch(UPDATE_URL, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return;
+    const latest = await res.json();
+    const current = app.getVersion();
+    if (cmpVersions(latest.version, current) <= 0) return;
+    if (updatePromptedFor === latest.version && !interactive) return; // once per session
+    updatePromptedFor = latest.version;
+    log(`update available: ${latest.version} (running ${current})`);
+    const { dialog, shell } = require("electron");
+    const choice = await dialog.showMessageBox(mainWindow ?? undefined, {
+      type: "info",
+      title: "Update available",
+      message: `${latest.label || "A new version"} is available`,
+      detail: `You're on v${current}.` + (latest.notes ? `\n\nWhat's new: ${latest.notes}` : "") + "\n\nDownload and run the installer to update — your data is untouched.",
+      buttons: ["Download update", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice.response === 0 && latest.windows) shell.openExternal(latest.windows);
+  } catch (err) {
+    log(`update check failed: ${err && err.message}`);
+  }
+}
 const os = require("node:os");
 
 const ACCENT = "#00FF41";
@@ -265,6 +306,9 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow && mainWindow.show());
+  // check for updates shortly after launch, then every 6 hours
+  setTimeout(() => void checkForUpdates(false), 15_000);
+  setInterval(() => void checkForUpdates(false), 6 * 60 * 60 * 1000);
   if (DEV_URL) mainWindow.loadURL(appUrl);
   else mainWindow.loadFile(path.join(__dirname, "splash.html"));
 

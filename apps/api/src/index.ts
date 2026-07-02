@@ -136,6 +136,21 @@ app.use(
 app.get("/", (c) => c.json({ service: "budgetsmart-api", status: "ok", time: now() }));
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+/* ------------------------------------------------------------------ *
+ * Release channel — installed apps poll this to learn about updates.
+ * Bump LATEST on each release (keep in sync with shared APP_VERSION).
+ * ------------------------------------------------------------------ */
+const LATEST = {
+  version: "1.2.1",
+  channel: "beta",
+  label: "Beta v1.2.1",
+  notes: "Shared family goals, weekly reports, financial calendar, custom tabs & sub-categories, Pulse health score, statement import, and loading-screen tips.",
+  windows: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-Setup.exe",
+  linux: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage",
+  android: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk",
+};
+app.get("/version", (c) => c.json(LATEST));
+
 // Installer uploads through the R2 binding (multipart), guarded by a secret
 // token. R2's public/S3 side is inconsistent on this account, so installers are
 // written via the binding and served by /download below.

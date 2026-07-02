@@ -4,6 +4,30 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { useEntitlements } from "../lib/hooks";
+import { APP_VERSION, APP_VERSION_LABEL, compareVersions } from "@budgetsmart/shared";
+
+const VERSION_URL = "https://budgetsmart-api.budgetsmart.workers.dev/version";
+
+/** Version footer + "update available" link when the central channel is ahead. */
+function VersionFooter() {
+  const [latest, setLatest] = useState<{ version: string; label: string; windows: string } | null>(null);
+  useEffect(() => {
+    fetch(VERSION_URL)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => v && compareVersions(v.version, APP_VERSION) > 0 && setLatest(v))
+      .catch(() => { /* offline — fine */ });
+  }, []);
+  return (
+    <div className="col" style={{ gap: 2, marginTop: 8 }}>
+      <span className="faint text-xs">{APP_VERSION_LABEL}</span>
+      {latest && (
+        <a className="accent text-xs" href={latest.windows} target="_blank" rel="noreferrer" title="A newer version is available">
+          ⬆ {latest.label} available — download
+        </a>
+      )}
+    </div>
+  );
+}
 
 interface NavItem { to: string; label: string; icon: string; end?: boolean; feature?: string }
 
@@ -152,6 +176,7 @@ export function AppShell() {
         </nav>
 
         <div className="sidebar-footer">
+          <VersionFooter />
           <div className="row between">
             <div className="col" style={{ minWidth: 0 }}>
               <span className="text-sm truncate" style={{ maxWidth: 150 }}>

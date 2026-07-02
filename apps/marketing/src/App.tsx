@@ -225,6 +225,7 @@ function Downloads() {
         <div className="eyebrow">{t("dl.eyebrow")}</div>
         <h2 className="section-title">{t("dl.title")}</h2>
         <p className="section-sub">{t("dl.sub")}</p>
+        <p className="section-sub" style={{ fontSize: 13, marginTop: 2 }}><span className="accent mono">Latest: Beta v1.2.1</span></p>
         <div className="dl-grid">
           {platforms.map((p) => (
             <div className="dl" key={p.os}>

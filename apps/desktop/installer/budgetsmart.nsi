@@ -7,7 +7,7 @@ Unicode true
 !include "MUI2.nsh"
 
 !define APPNAME    "BudgetSmart"
-!define APPVERSION "0.1.0"
+!define APPVERSION "1.2.1"
 !define PUBLISHER  "BudgetSmart"
 !define SRCDIR     "${__FILEDIR__}\..\dist-exe\BudgetSmart-win32-x64"
 !define ARP        "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
