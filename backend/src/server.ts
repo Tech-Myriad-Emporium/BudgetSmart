@@ -25,6 +25,7 @@ import { reportsRouter } from "./features/reports/reports.routes.js";
 import { subscriptionRouter } from "./features/subscription/subscription.routes.js";
 import { summaryRouter } from "./features/summary/summary.routes.js";
 import { transactionsRouter } from "./features/transactions/transactions.routes.js";
+import { auditRouter, auditTrailMiddleware } from "./features/audit/audit.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requireAuth } from "./middleware/auth.js";
 import { requireFeature } from "./middleware/entitlements.js";
@@ -39,6 +40,9 @@ export function createServer() {
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "budgetsmart-api", time: new Date().toISOString() });
   });
+
+  // Audit trail: records every successful mutating /api call (no bodies).
+  app.use(auditTrailMiddleware);
 
   // Base-tier (level 0) routers — available to every paying user.
   app.use("/api/auth", authRouter);
@@ -59,6 +63,7 @@ export function createServer() {
   app.use("/api/insights", requireAuth, requireFeature("insights"), insightsRouter);
   app.use("/api/import", requireAuth, requireFeature("import"), importRouter);
   app.use("/api/summary", requireAuth, requireFeature("monthlyEmail"), summaryRouter);
+  app.use("/api/audit", requireAuth, requireFeature("audit"), auditRouter);
   app.use("/api/forecast", requireAuth, requireFeature("forecast"), forecastRouter);
   app.use("/api/pulse", requireAuth, requireFeature("ai"), pulseRouter);
   app.use("/api/intelligence", requireAuth, requireFeature("intelligence"), intelligenceRouter);

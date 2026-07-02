@@ -8,8 +8,59 @@ import {
 } from "@budgetsmart/shared";
 import { useState, type FormEvent } from "react";
 import { EmptyState, ErrorText, Field, Modal, Money, Spinner } from "../../components/ui";
-import { useAccountMutations, useAccounts } from "../../lib/hooks";
+import { useAccountMutations, useAccounts, useAuditTrail, useEntitlements } from "../../lib/hooks";
 import { ApiError } from "../../lib/api";
+
+
+
+/** Which human action a logged API call corresponds to. */
+function auditLabel(method: string, path: string): string {
+  const p = path.replace(/^\/api\//, "");
+  const verb = method === "POST" ? "Created / ran" : method === "DELETE" ? "Deleted" : "Updated";
+  const noun = p.split("/")[0] ?? p;
+  const MAP: Record<string, string> = {
+    transactions: "transaction", accounts: "account", categories: "category", budgets: "budget",
+    goals: "goal", debts: "debt", investments: "holding", family: "family action", auth: "sign-in/security",
+    import: "statement import", recurring: "recurring setting", summary: "email summary", account: "account link",
+  };
+  return `${verb} ${MAP[noun] ?? noun}`;
+}
+
+function AuditCard() {
+  const { has } = useEntitlements();
+  const auditQ = useAuditTrail(has("audit"));
+  if (!has("audit")) {
+    return (
+      <div className="card">
+        <span className="card-title">🧾 Audit trail</span>
+        <p className="faint text-xs" style={{ marginTop: 8 }}>
+          Tier 3 keeps an append-only log of every change — who did what, when. Required-grade record keeping.
+        </p>
+      </div>
+    );
+  }
+  const entries = auditQ.data ?? [];
+  return (
+    <div className="card">
+      <div className="row between">
+        <span className="card-title">🧾 Audit trail</span>
+        <span className="faint text-xs">last {entries.length} actions · bodies never stored</span>
+      </div>
+      <div className="col" style={{ marginTop: 10, maxHeight: 320, overflowY: "auto" }}>
+        {entries.length === 0 ? (
+          <span className="faint text-sm">No logged actions yet.</span>
+        ) : (
+          entries.map((e) => (
+            <div className="row between text-xs" key={e.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+              <span>{auditLabel(e.method, e.path)}</span>
+              <span className="faint mono">{e.method} {e.path.replace("/api/", "")} · {new Date(e.createdAt).toLocaleString()}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function AccountsPage() {
   const accountsQ = useAccounts();
@@ -90,6 +141,7 @@ export function AccountsPage() {
       </div>
 
       {adding && <AddAccountModal onClose={() => setAdding(false)} />}
+      <AuditCard />
     </div>
   );
 }

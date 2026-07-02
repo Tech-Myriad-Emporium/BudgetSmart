@@ -131,6 +131,9 @@ export const usePulse = (enabled: boolean) =>
 export const useInsights = () =>
   useQuery({ queryKey: ["insights"], queryFn: () => api.insights().then((r) => r.summary) });
 
+export const useAuditTrail = (enabled: boolean) =>
+  useQuery({ queryKey: ["audit"], queryFn: () => api.auditTrail(100).then((r) => r.entries), enabled });
+
 export const useSummaryPrefs = (enabled: boolean) =>
   useQuery({ queryKey: ["summary-prefs"], queryFn: () => api.summaryPrefs(), enabled });
 

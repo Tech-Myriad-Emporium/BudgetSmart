@@ -229,6 +229,7 @@ export const FEATURES: Feature[] = [
   { key: "tax", label: "Tax intelligence", description: "Full federal/state tax modeling", level: 3 },
   { key: "advisor", label: "Advisor portal", description: "Share access with a pro", level: 3 },
   { key: "intelligence", label: "Money intelligence", description: "Tax, debt, investment & life intelligence", level: 3 },
+  { key: "audit", label: "Audit trail", description: "Every change logged, timestamped & reviewable", level: 3 },
   // Family plans only
   { key: "family", label: "Family management", description: "Up to 5 members, allowances, overview", level: 1, familyOnly: true },
   { key: "chores", label: "Chores & allowance automation", description: "Assign chores; completing them pays the wallet", level: 2, familyOnly: true },

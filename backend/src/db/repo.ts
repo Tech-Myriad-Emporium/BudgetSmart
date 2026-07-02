@@ -54,6 +54,35 @@ export const users = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Audit trail (append-only; pruned to the newest 5000 rows per user)
+ * ------------------------------------------------------------------ */
+export interface AuditRow {
+  id: string;
+  userId: string;
+  method: string;
+  path: string;
+  status: number;
+  createdAt: string;
+}
+
+export const auditLog = {
+  add(userId: string, method: string, path: string, status: number): void {
+    db.prepare("INSERT INTO audit_log (id,userId,method,path,status,createdAt) VALUES (?,?,?,?,?,?)").run(
+      newId(), userId, method, path.slice(0, 200), status, nowIso(),
+    );
+    // keep the log bounded (cheap because of the (userId, createdAt) index)
+    db.prepare(
+      "DELETE FROM audit_log WHERE userId = ? AND id NOT IN (SELECT id FROM audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT 5000)",
+    ).run(userId, userId);
+  },
+  list(userId: string, limit = 100): AuditRow[] {
+    return rows<AuditRow>(
+      db.prepare("SELECT * FROM audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ?").all(userId, limit),
+    );
+  },
+};
+
+/* ------------------------------------------------------------------ *
  * Recurring-detection overrides (user customization)
  * ------------------------------------------------------------------ */
 export const recurringOverrides = {

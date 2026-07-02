@@ -227,6 +227,17 @@ CREATE TABLE IF NOT EXISTS recurring_overrides (
   PRIMARY KEY (userId, key)
 );
 
+-- Append-only audit trail: every successful mutating API action.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id        TEXT PRIMARY KEY,
+  userId    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method    TEXT NOT NULL,
+  path      TEXT NOT NULL,
+  status    INTEGER NOT NULL,
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_user_time ON audit_log(userId, createdAt DESC);
+
 -- Opt-in monthly email digest (sent via the central API from the bot Gmail).
 CREATE TABLE IF NOT EXISTS email_prefs (
   userId        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

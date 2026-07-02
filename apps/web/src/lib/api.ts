@@ -279,6 +279,10 @@ export const api = {
   removeRecurringOverride: (key: string) =>
     request<{ ok: boolean }>(`/recurring/override/${encodeURIComponent(key)}`, { method: "DELETE" }),
 
+  // audit trail
+  auditTrail: (limit = 100) =>
+    request<{ entries: Array<{ id: string; method: string; path: string; status: number; createdAt: string }> }>(`/audit${qs({ limit })}`),
+
   // monthly email digest
   summaryPrefs: () =>
     request<{ enabled: boolean; lastSentMonth: string | null; weeklyEnabled: boolean; lastSentWeek: string | null }>("/summary/prefs"),
