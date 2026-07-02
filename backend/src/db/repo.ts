@@ -47,6 +47,41 @@ export const users = {
     db.prepare("UPDATE users SET tier = ? WHERE id = ?").run(tier, id);
     return row<UserRow>(db.prepare("SELECT * FROM users WHERE id = ?").get(id))!;
   },
+  listAll(): UserRow[] {
+    return rows<UserRow>(db.prepare("SELECT * FROM users").all());
+  },
+};
+
+/* ------------------------------------------------------------------ *
+ * Email digest preferences
+ * ------------------------------------------------------------------ */
+export interface EmailPrefsRow {
+  userId: string;
+  monthlyEmail: number;
+  lastSentMonth: string | null;
+}
+
+export const emailPrefs = {
+  get(userId: string): EmailPrefsRow {
+    return (
+      row<EmailPrefsRow>(db.prepare("SELECT * FROM email_prefs WHERE userId = ?").get(userId)) ?? {
+        userId,
+        monthlyEmail: 0,
+        lastSentMonth: null,
+      }
+    );
+  },
+  setEnabled(userId: string, enabled: boolean): EmailPrefsRow {
+    db.prepare(
+      "INSERT INTO email_prefs (userId, monthlyEmail) VALUES (?, ?) ON CONFLICT(userId) DO UPDATE SET monthlyEmail = excluded.monthlyEmail",
+    ).run(userId, boolToInt(enabled));
+    return this.get(userId);
+  },
+  markSent(userId: string, month: string): void {
+    db.prepare(
+      "INSERT INTO email_prefs (userId, monthlyEmail, lastSentMonth) VALUES (?, 1, ?) ON CONFLICT(userId) DO UPDATE SET lastSentMonth = excluded.lastSentMonth",
+    ).run(userId, month);
+  },
 };
 
 /* ------------------------------------------------------------------ *

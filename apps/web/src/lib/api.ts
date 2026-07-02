@@ -266,6 +266,15 @@ export const api = {
   // recurring
   recurring: () => request<{ summary: RecurringSummary }>("/recurring"),
 
+  // monthly email digest
+  summaryPrefs: () => request<{ enabled: boolean; lastSentMonth: string | null }>("/summary/prefs"),
+  setSummaryPrefs: (enabled: boolean) =>
+    request<{ enabled: boolean; lastSentMonth: string | null }>("/summary/prefs", {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+  sendSummaryNow: () => request<{ ok: boolean; month: string; sentTo?: string }>("/summary/send-now", { method: "POST" }),
+
   // statement import
   importPreview: (content: string, mapping?: CsvMapping) =>
     request<{ analysis: ImportAnalysis }>("/import/preview", { method: "POST", body: JSON.stringify({ content, mapping }) }),

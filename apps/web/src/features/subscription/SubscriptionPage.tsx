@@ -23,6 +23,8 @@ import {
   usePlans,
   useRequestMutations,
   useSubscription,
+  useSummaryMutations,
+  useSummaryPrefs,
   useSyncAccount,
   useUnlinkAccount,
 } from "../../lib/hooks";
@@ -47,6 +49,7 @@ const BUILDS_ON: Record<string, string> = {
 export function SubscriptionPage() {
   const subQ = useSubscription();
   const plansQ = usePlans();
+  const { has } = useEntitlements();
   const [billing, setBilling] = useState<BillingInterval>("year");
 
   const current = subQ.data;
@@ -62,6 +65,7 @@ export function SubscriptionPage() {
   return (
     <div className="page">
       <AccountCard />
+      {has("monthlyEmail") && <MonthlyEmailCard />}
 
       {/* current plan */}
       <div className="card" style={{ borderColor: "var(--border-accent)", boxShadow: "var(--shadow-glow)" }}>
@@ -118,6 +122,57 @@ export function SubscriptionPage() {
             hint="Choose any Family plan on the web to add up to 5 members, set allowances, and see a family overview."
           />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Opt-in monthly digest email (T1+), sent via the bot Gmail to the linked account. */
+function MonthlyEmailCard() {
+  const accountQ = useAccountLink();
+  const prefsQ = useSummaryPrefs(true);
+  const { setEnabled, sendNow } = useSummaryMutations();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const linked = accountQ.data?.linked ?? false;
+  const email = accountQ.data?.email;
+  const enabled = prefsQ.data?.enabled ?? false;
+  const busy = setEnabled.isPending || sendNow.isPending;
+
+  function sendTest() {
+    setMsg(null);
+    sendNow.mutate(undefined, {
+      onSuccess: (r) => setMsg({ ok: true, text: `Sent your ${r.month} recap to ${r.sentTo ?? email} — check spam if it hides.` }),
+      onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
+    });
+  }
+
+  return (
+    <div className="card">
+      <div className="row between wrap" style={{ gap: 12 }}>
+        <div className="col" style={{ minWidth: 0 }}>
+          <span className="card-title">📬 Monthly email summary</span>
+          <span className="faint text-xs" style={{ marginTop: 4 }}>
+            {linked
+              ? `A recap of each month — income, spending, top categories, budgets — emailed to ${email} from our bot address. Numbers are computed on this device.`
+              : "Connect your BudgetSmart account above first — the recap is emailed to that address."}
+          </span>
+        </div>
+        <div className="row gap-sm">
+          <button className="btn btn-sm" onClick={sendTest} disabled={busy || !linked} title="Email last month's recap now">
+            {sendNow.isPending ? <span className="ring" /> : "Send now"}
+          </button>
+          <button
+            className={`btn btn-sm ${enabled ? "btn-primary" : ""}`}
+            onClick={() => setEnabled.mutate(!enabled)}
+            disabled={busy || !linked}
+          >
+            {enabled ? "✓ On — every month" : "Turn on"}
+          </button>
+        </div>
+      </div>
+      {msg && (
+        <div className="text-xs" style={{ color: msg.ok ? "var(--accent)" : "var(--danger)", marginTop: 8 }}>{msg.text}</div>
       )}
     </div>
   );

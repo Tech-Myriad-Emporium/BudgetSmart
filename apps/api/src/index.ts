@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { hashPassword, verifyPassword, randomToken, newId } from "./crypto.js";
-import { sendVerificationEmail, sendFamilyInviteEmail } from "./email.js";
+import { sendVerificationEmail, sendFamilyInviteEmail, sendMonthlyDigestEmail, type DigestPayload } from "./email.js";
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
 import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
@@ -664,6 +664,57 @@ app.post("/family/leave", auth, async (c) => {
   await c.env.DB.prepare("DELETE FROM family_members WHERE family_id = ? AND user_id = ?").bind(fam.id, user.id).run();
   await notify(c.env, fam.owner_id, "family", `${user.name || user.email} left your family`, undefined);
   return c.json({ ok: true, account: await accountView(c.env, user) });
+});
+
+/**
+ * Monthly digest email (T1+). The app computes the numbers locally and sends
+ * only this structured payload; we render + mail it from the bot Gmail.
+ */
+app.post("/email/monthly-summary", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const tier = await resolveTier(c.env, user);
+  if (tier === "base") return c.json({ error: "Monthly summaries need a Tier 1+ plan" }, 403);
+
+  // Light abuse guard: at most one summary email per 20h per account.
+  const last = await c.env.DB.prepare("SELECT summary_sent_at FROM users WHERE id = ?").bind(user.id).first<{ summary_sent_at: number | null }>();
+  if (last?.summary_sent_at && unix() - last.summary_sent_at < 20 * 3600) {
+    return c.json({ error: "A summary was already sent recently — try again tomorrow" }, 429);
+  }
+
+  const b = (await c.req.json().catch(() => null)) as Partial<DigestPayload> | null;
+  if (!b || !/^\d{4}-\d{2}$/.test(String(b.month))) return c.json({ error: "Invalid summary payload" }, 400);
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : 0);
+  const digest: DigestPayload = {
+    month: String(b.month),
+    income: num(b.income),
+    expenses: num(b.expenses),
+    net: num(b.net),
+    txCount: Math.min(num(b.txCount), 1_000_000),
+    expenseDeltaPct: typeof b.expenseDeltaPct === "number" && Number.isFinite(b.expenseDeltaPct) ? b.expenseDeltaPct : null,
+    topCategories: (Array.isArray(b.topCategories) ? b.topCategories.slice(0, 5) : []).map((cat: any) => ({
+      name: String(cat?.name ?? "").slice(0, 40),
+      icon: String(cat?.icon ?? "◦").slice(0, 4),
+      amount: num(cat?.amount),
+    })),
+    budgets:
+      b.budgets && typeof b.budgets === "object"
+        ? {
+            count: Math.min(num((b.budgets as any).count), 500),
+            overCount: Math.min(num((b.budgets as any).overCount), 500),
+            totalLimit: num((b.budgets as any).totalLimit),
+            totalSpent: num((b.budgets as any).totalSpent),
+          }
+        : null,
+    subscriptionCount: Math.min(num(b.subscriptionCount), 500),
+    subscriptionMonthly: num(b.subscriptionMonthly),
+    liquidBalance: num(b.liquidBalance),
+  };
+
+  const sent = await sendMonthlyDigestEmail(c.env, user.email, user.name, digest);
+  if (!sent) return c.json({ error: "Couldn't send the email — try again later" }, 502);
+  await c.env.DB.prepare("UPDATE users SET summary_sent_at = ? WHERE id = ?").bind(unix(), user.id).run();
+  return c.json({ ok: true, sentTo: user.email });
 });
 
 /** The endpoint the desktop app polls on reload to sync its tier. */

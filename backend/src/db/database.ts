@@ -214,6 +214,13 @@ CREATE TABLE IF NOT EXISTS family_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_family_requests_owner ON family_requests(ownerId);
 
+-- Opt-in monthly email digest (sent via the central API from the bot Gmail).
+CREATE TABLE IF NOT EXISTS email_prefs (
+  userId        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  monthlyEmail  INTEGER NOT NULL DEFAULT 0,
+  lastSentMonth TEXT
+);
+
 -- Link between this local account and the central BudgetSmart account (web).
 -- The central account is the source of truth for the subscription tier; on
 -- reload the app re-syncs the tier from it.

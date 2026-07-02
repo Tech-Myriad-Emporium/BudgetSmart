@@ -112,6 +112,17 @@ export const useRecurring = () =>
 export const useInsights = () =>
   useQuery({ queryKey: ["insights"], queryFn: () => api.insights().then((r) => r.summary) });
 
+export const useSummaryPrefs = (enabled: boolean) =>
+  useQuery({ queryKey: ["summary-prefs"], queryFn: () => api.summaryPrefs(), enabled });
+
+export function useSummaryMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["summary-prefs"] });
+  const setEnabled = useMutation({ mutationFn: (enabled: boolean) => api.setSummaryPrefs(enabled), onSuccess: invalidate });
+  const sendNow = useMutation({ mutationFn: () => api.sendSummaryNow(), onSuccess: invalidate });
+  return { setEnabled, sendNow };
+}
+
 export const useForecast = () =>
   useQuery({ queryKey: ["forecast"], queryFn: () => api.forecast().then((r) => r.summary) });
 

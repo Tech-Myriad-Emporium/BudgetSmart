@@ -1,7 +1,9 @@
 import { env } from "./env.js";
 import { createServer } from "./server.js";
+import { startDigestScheduler } from "./features/summary/summary.js";
 
 const app = createServer();
+startDigestScheduler();
 
 app.listen(env.port, () => {
   // eslint-disable-next-line no-console

@@ -22,6 +22,7 @@ import { netWorthRouter } from "./features/networth/networth.routes.js";
 import { recurringRouter } from "./features/recurring/recurring.routes.js";
 import { reportsRouter } from "./features/reports/reports.routes.js";
 import { subscriptionRouter } from "./features/subscription/subscription.routes.js";
+import { summaryRouter } from "./features/summary/summary.routes.js";
 import { transactionsRouter } from "./features/transactions/transactions.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -56,6 +57,7 @@ export function createServer() {
   app.use("/api/reports", requireAuth, requireFeature("reports"), reportsRouter);
   app.use("/api/insights", requireAuth, requireFeature("insights"), insightsRouter);
   app.use("/api/import", requireAuth, requireFeature("import"), importRouter);
+  app.use("/api/summary", requireAuth, requireFeature("monthlyEmail"), summaryRouter);
   app.use("/api/forecast", requireAuth, requireFeature("forecast"), forecastRouter);
   app.use("/api/intelligence", requireAuth, requireFeature("intelligence"), intelligenceRouter);
   app.use("/api/investments", requireAuth, requireFeature("investments"), investmentsRouter);
