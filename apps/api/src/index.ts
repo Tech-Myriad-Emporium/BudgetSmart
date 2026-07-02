@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, randomToken, newId } from "./crypto.js";
 import { sendVerificationEmail } from "./email.js";
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
+import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
 import type { AccountView, Env, UserRow } from "./types.js";
 
 type Vars = { userId: string };
@@ -55,6 +56,8 @@ async function auth(c: any, next: () => Promise<void>) {
   if (!header?.startsWith("Bearer ")) return c.json({ error: "Missing token" }, 401);
   try {
     const payload = await verify(header.slice(7).trim(), c.env.JWT_SECRET, "HS256");
+    // A "2FA pending" challenge token is not a real session — reject it here.
+    if ((payload as any).twofa === "pending") return c.json({ error: "Two-factor step not completed" }, 401);
     c.set("userId", String(payload.sub));
     await next();
   } catch {
@@ -266,6 +269,31 @@ app.post("/auth/login", async (c) => {
     await createAndSendVerification(c.env, user);
     return c.json({ error: "Please verify your email — we've sent a new link.", code: "email_unverified" }, 403);
   }
+  if (user.totp_enabled === 1) {
+    // Password OK, but the account is protected by an authenticator — issue a
+    // short-lived challenge the client redeems at /auth/2fa/verify with a code.
+    const challenge = await sign({ sub: user.id, twofa: "pending", exp: unix() + 300 }, c.env.JWT_SECRET, "HS256");
+    return c.json({ twoFactor: true, challenge });
+  }
+  const token = await issueToken(c.env, user);
+  return c.json({ token, account: view(user, c.env) });
+});
+
+/** Redeem a 2FA challenge with a 6-digit authenticator code for a real session. */
+app.post("/auth/2fa/verify", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  let payload: any;
+  try {
+    payload = await verify(String(body.challenge ?? ""), c.env.JWT_SECRET, "HS256");
+  } catch {
+    return c.json({ error: "That took too long — please sign in again." }, 401);
+  }
+  if (payload.twofa !== "pending") return c.json({ error: "Invalid challenge" }, 400);
+  const user = await getUserById(c.env, String(payload.sub));
+  if (!user || user.totp_enabled !== 1 || !user.totp_secret) return c.json({ error: "Two-factor isn't enabled" }, 400);
+  if (!(await verifyTotp(user.totp_secret, String(body.code ?? "")))) {
+    return c.json({ error: "Incorrect code — check your authenticator app" }, 401);
+  }
   const token = await issueToken(c.env, user);
   return c.json({ token, account: view(user, c.env) });
 });
@@ -381,6 +409,46 @@ app.post("/account/avatar", auth, async (c) => {
   if (bytes.length > 2_000_000) return c.json({ error: "Image too large (max 2MB)" }, 400);
   await c.env.DOWNLOADS.put(`avatars/${user.id}`, bytes, { httpMetadata: { contentType: m[1] } });
   await c.env.DB.prepare("UPDATE users SET avatar_key = ?, updated_at = ? WHERE id = ?").bind(`avatars/${user.id}`, now(), user.id).run();
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ account: view(updated!, c.env) });
+});
+
+/* ------------------------------------------------------------------ *
+ * Two-factor authentication (TOTP authenticator apps)
+ * ------------------------------------------------------------------ */
+/** Begin setup: mint a secret (not yet active) and return it + an otpauth URI. */
+app.post("/account/2fa/setup", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  if (user.totp_enabled === 1) return c.json({ error: "Two-factor is already on" }, 400);
+  const secret = generateSecret();
+  await c.env.DB.prepare("UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?").bind(secret, now(), user.id).run();
+  return c.json({ secret, otpauth: otpauthUri(user.email, secret) });
+});
+
+/** Confirm setup: verify a code against the pending secret, then activate. */
+app.post("/account/2fa/enable", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  if (!user.totp_secret) return c.json({ error: "Start setup first" }, 400);
+  const code = String((await c.req.json().catch(() => ({}))).code ?? "");
+  if (!(await verifyTotp(user.totp_secret, code))) return c.json({ error: "That code didn't match — check your authenticator" }, 400);
+  await c.env.DB.prepare("UPDATE users SET totp_enabled = 1, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
+  await notify(c.env, user.id, "security", "Two-factor authentication enabled", "Your account now asks for a 6-digit code when you sign in.");
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ account: view(updated!, c.env) });
+});
+
+/** Turn 2FA off — requires a current code so a hijacked session can't disable it. */
+app.post("/account/2fa/disable", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const code = String((await c.req.json().catch(() => ({}))).code ?? "");
+  if (user.totp_enabled === 1 && user.totp_secret && !(await verifyTotp(user.totp_secret, code))) {
+    return c.json({ error: "Enter a current code to turn 2FA off" }, 400);
+  }
+  await c.env.DB.prepare("UPDATE users SET totp_enabled = 0, totp_secret = NULL, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
+  await notify(c.env, user.id, "security", "Two-factor authentication disabled", "2FA is no longer required when you sign in.");
   const updated = await getUserById(c.env, user.id);
   return c.json({ account: view(updated!, c.env) });
 });

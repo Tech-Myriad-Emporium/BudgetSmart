@@ -567,6 +567,13 @@ section {
   display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 4px; border-radius: 999px;
   background: #00ff41; color: #000; font-size: 11px; font-weight: 700; text-align: center;
 }
+.acct-badge.on { background: #00ff41; }
+.acct-secret {
+  display: block; margin-top: 8px; padding: 12px 14px; border-radius: 8px;
+  border: 1px solid #2a2a2a; background: #0c0c0c; color: #00ff41;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 17px; letter-spacing: 2px; word-break: break-all; user-select: all;
+}
 .acct-notif-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
 .acct-notif { padding: 12px 14px; border-radius: 8px; border: 1px solid #1c1c1c; }
 .acct-notif.unread { border-color: #00ff41; background: #00ff4108; }

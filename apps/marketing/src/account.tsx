@@ -87,6 +87,8 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState<string | null>(null); // set when 2FA is required
+  const [code, setCode] = useState("");
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(() =>
     new URLSearchParams(window.location.search).get("oauth") === "error"
       ? { kind: "err", text: "Google sign-in didn't complete. Please try again." }
@@ -102,11 +104,35 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
         else setMsg({ kind: "err", text: r.data.error ?? "Couldn't register." });
       } else {
         const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
-        if (r.ok) { localStorage.setItem(TOKEN_KEY, r.data.token); onAuthed(); }
+        if (r.ok && r.data.twoFactor) { setChallenge(r.data.challenge); }
+        else if (r.ok) { localStorage.setItem(TOKEN_KEY, r.data.token); onAuthed(); }
         else if (r.status === 403) setMsg({ kind: "info", text: "Please verify your email first — we've re-sent the link. Check your spam/junk folder if it isn't in your inbox." });
         else setMsg({ kind: "err", text: r.data.error ?? "Couldn't sign in." });
       }
     } finally { setBusy(false); }
+  }
+
+  async function verify2fa() {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api("/auth/2fa/verify", { method: "POST", body: JSON.stringify({ challenge, code }) });
+      if (r.ok) { localStorage.setItem(TOKEN_KEY, r.data.token); onAuthed(); }
+      else { setMsg({ kind: "err", text: r.data.error ?? "Incorrect code." }); if (r.status === 401 && String(r.data.error ?? "").includes("sign in")) setChallenge(null); }
+    } finally { setBusy(false); }
+  }
+
+  if (challenge) {
+    return (
+      <div className="acct-card">
+        <div className="acct-muted" style={{ marginBottom: 12 }}>🔒 Two-factor authentication</div>
+        <p className="acct-muted" style={{ fontSize: 13, marginBottom: 12 }}>Enter the 6-digit code from your authenticator app.</p>
+        <input className="acct-input" inputMode="numeric" autoFocus maxLength={6} placeholder="123456" value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && verify2fa()} />
+        <button className="btn btn-primary acct-block" onClick={verify2fa} disabled={busy || code.length < 6}>{busy ? "…" : "Verify"}</button>
+        <button className="btn acct-block acct-ghost" onClick={() => { setChallenge(null); setCode(""); setMsg(null); }} style={{ marginTop: 8 }}>Back</button>
+        {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
+      </div>
+    );
   }
 
   return (
@@ -223,6 +249,73 @@ function ProfileEditor({ account, onChange }: { account: Account; onChange: () =
   );
 }
 
+function SecuritySettings({ account, onChange }: { account: Account; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [setup, setSetup] = useState<{ secret: string; otpauth: string } | null>(null);
+  const [disabling, setDisabling] = useState(false);
+  const [code, setCode] = useState("");
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function begin() {
+    setBusy(true); setMsg(null);
+    const r = await api<{ secret: string; otpauth: string }>("/account/2fa/setup", { method: "POST" });
+    setBusy(false);
+    if (r.ok) setSetup(r.data); else setMsg({ kind: "err", text: r.data.error ?? "Couldn't start setup." });
+  }
+  async function confirm() {
+    setBusy(true); setMsg(null);
+    const r = await api("/account/2fa/enable", { method: "POST", body: JSON.stringify({ code }) });
+    setBusy(false);
+    if (r.ok) { setSetup(null); setCode(""); setMsg({ kind: "ok", text: "Two-factor is on." }); onChange(); }
+    else setMsg({ kind: "err", text: r.data.error ?? "Couldn't enable." });
+  }
+  async function disable() {
+    setBusy(true); setMsg(null);
+    const r = await api("/account/2fa/disable", { method: "POST", body: JSON.stringify({ code }) });
+    setBusy(false);
+    if (r.ok) { setDisabling(false); setCode(""); setMsg({ kind: "ok", text: "Two-factor turned off." }); onChange(); }
+    else setMsg({ kind: "err", text: r.data.error ?? "Couldn't disable." });
+  }
+  const codeInput = (
+    <input className="acct-input" inputMode="numeric" maxLength={6} autoFocus placeholder="123456" value={code}
+      onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+  );
+
+  return (
+    <div className="acct-card">
+      <div className="acct-row">
+        <div className="acct-muted">🔒 Two-factor authentication {account.twoFactorEnabled && <span className="acct-badge on">On</span>}</div>
+        {!account.twoFactorEnabled && !setup && <button className="btn" onClick={begin} disabled={busy}>{busy ? "…" : "Enable 2FA"}</button>}
+        {account.twoFactorEnabled && !disabling && <button className="btn acct-ghost" onClick={() => setDisabling(true)}>Turn off</button>}
+      </div>
+
+      {setup && (
+        <div style={{ marginTop: 12 }}>
+          <p className="acct-muted" style={{ fontSize: 13 }}>1. In an authenticator app (Google Authenticator, Authy, 1Password…) add an account and enter this setup key:</p>
+          <code className="acct-secret">{setup.secret}</code>
+          <p className="acct-muted" style={{ fontSize: 13, marginTop: 12 }}>2. Enter the 6-digit code it shows:</p>
+          {codeInput}
+          <button className="btn btn-primary acct-block" onClick={confirm} disabled={busy || code.length < 6}>{busy ? "…" : "Confirm & enable"}</button>
+        </div>
+      )}
+
+      {disabling && (
+        <div style={{ marginTop: 12 }}>
+          <p className="acct-muted" style={{ fontSize: 13 }}>Enter a current code to turn 2FA off:</p>
+          {codeInput}
+          <div className="acct-two" style={{ marginTop: 8 }}>
+            <button className="btn btn-primary acct-block" onClick={disable} disabled={busy || code.length < 6}>{busy ? "…" : "Turn off 2FA"}</button>
+            <button className="btn acct-block acct-ghost" onClick={() => { setDisabling(false); setCode(""); setMsg(null); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {!account.twoFactorEnabled && !setup && <p className="acct-muted" style={{ fontSize: 12, marginTop: 10 }}>Add a second step at sign-in using any authenticator app.</p>}
+      {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -276,6 +369,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
       </div>
 
       <ProfileEditor account={account} onChange={onChange} />
+      <SecuritySettings account={account} onChange={onChange} />
       <Notifications />
 
 
