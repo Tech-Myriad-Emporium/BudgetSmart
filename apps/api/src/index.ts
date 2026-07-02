@@ -687,6 +687,7 @@ app.post("/email/monthly-summary", auth, async (c) => {
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : 0);
   const digest: DigestPayload = {
     month: String(b.month),
+    weekLabel: typeof (b as { weekLabel?: unknown }).weekLabel === "string" ? String((b as { weekLabel?: string }).weekLabel).slice(0, 40) : null,
     income: num(b.income),
     expenses: num(b.expenses),
     net: num(b.net),

@@ -32,6 +32,7 @@ import type {
   Tier,
   Transaction,
   TransactionType,
+  WeeklyReport,
 } from "@budgetsmart/shared";
 
 const TOKEN_KEY = "budgetsmart.token";
@@ -273,13 +274,16 @@ export const api = {
     request<{ ok: boolean }>(`/recurring/override/${encodeURIComponent(key)}`, { method: "DELETE" }),
 
   // monthly email digest
-  summaryPrefs: () => request<{ enabled: boolean; lastSentMonth: string | null }>("/summary/prefs"),
-  setSummaryPrefs: (enabled: boolean) =>
-    request<{ enabled: boolean; lastSentMonth: string | null }>("/summary/prefs", {
+  summaryPrefs: () =>
+    request<{ enabled: boolean; lastSentMonth: string | null; weeklyEnabled: boolean; lastSentWeek: string | null }>("/summary/prefs"),
+  setSummaryPrefs: (prefs: { enabled?: boolean; weeklyEnabled?: boolean }) =>
+    request<{ enabled: boolean; lastSentMonth: string | null; weeklyEnabled: boolean; lastSentWeek: string | null }>("/summary/prefs", {
       method: "POST",
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify(prefs),
     }),
   sendSummaryNow: () => request<{ ok: boolean; month: string; sentTo?: string }>("/summary/send-now", { method: "POST" }),
+  sendWeeklyNow: () => request<{ ok: boolean; sentTo?: string }>("/summary/send-week-now", { method: "POST" }),
+  weeklyReport: () => request<{ report: WeeklyReport }>("/reports/weekly"),
 
   // statement import
   importPreview: (content: string, mapping?: CsvMapping) =>

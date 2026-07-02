@@ -57,6 +57,8 @@ const usd = (cents: number) =>
 
 export interface DigestPayload {
   month: string;
+  /** When set, this is a weekly recap (e.g. "Jun 23 - Jun 29"). */
+  weekLabel?: string | null;
   income: number;
   expenses: number;
   net: number;
@@ -71,11 +73,14 @@ export interface DigestPayload {
 
 export function sendMonthlyDigestEmail(env: Env, to: string, name: string, d: DigestPayload): Promise<boolean> {
   const monthName = new Date(`${d.month}-15T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  const weekly = !!d.weekLabel;
+  const periodName = weekly ? esc(d.weekLabel!) : monthName;
+  const vsLabel = weekly ? "week" : "month";
   const greeting = name ? `Hi ${esc(name)},` : "Hi,";
   const deltaLine =
     d.expenseDeltaPct === null
       ? ""
-      : `<p style="color:${d.expenseDeltaPct > 0 ? "#ff5c5c" : "#00FF41"};font-size:13px;margin:4px 0 0">spending ${d.expenseDeltaPct > 0 ? "up" : "down"} ${Math.abs(Math.round(d.expenseDeltaPct * 100))}% vs the month before</p>`;
+      : `<p style="color:${d.expenseDeltaPct > 0 ? "#ff5c5c" : "#00FF41"};font-size:13px;margin:4px 0 0">spending ${d.expenseDeltaPct > 0 ? "up" : "down"} ${Math.abs(Math.round(d.expenseDeltaPct * 100))}% vs the ${vsLabel} before</p>`;
   const row = (label: string, value: string, color = "#e6e6e6") =>
     `<tr><td style="padding:6px 0;color:#9a9a9a;font-size:13px">${label}</td><td align="right" style="padding:6px 0;color:${color};font-size:13px;font-weight:600">${value}</td></tr>`;
 
@@ -90,9 +95,9 @@ export function sendMonthlyDigestEmail(env: Env, to: string, name: string, d: Di
     : "";
 
   const html = wrap(
-    `Your ${monthName} money recap`,
+    weekly ? `Your week in money (${periodName})` : `Your ${monthName} money recap`,
     `<p>${greeting}</p>
-     <p style="color:#9a9a9a;font-size:14px">Here's how ${monthName} went (${d.txCount} transactions):</p>
+     <p style="color:#9a9a9a;font-size:14px">Here's how ${weekly ? `the week of ${periodName}` : monthName} went (${d.txCount} transactions):</p>
      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
        ${row("Income", usd(d.income), "#00FF41")}
        ${row("Spending", usd(d.expenses), "#ff5c5c")}
@@ -106,11 +111,11 @@ export function sendMonthlyDigestEmail(env: Env, to: string, name: string, d: Di
      <p style="color:#7a7a7a;font-size:12px;margin-top:28px">Sent because monthly summaries are enabled in your BudgetSmart app — turn them off any time on the Plans page. Numbers are computed on your device.</p>`,
   );
   const text =
-    `${greeting}\n\n${monthName} recap (${d.txCount} transactions):\n` +
+    `${greeting}\n\n${periodName} recap (${d.txCount} transactions):\n` +
     `Income ${usd(d.income)} · Spending ${usd(d.expenses)} · Net ${usd(d.net)}\n` +
     d.topCategories.map((c) => `  ${c.name}: ${usd(c.amount)}`).join("\n") +
     `\n\nSent by BudgetSmart — disable monthly summaries in the app.`;
-  return send(env, to, `📊 Your ${monthName} BudgetSmart recap`, html, text);
+  return send(env, to, `📊 Your ${weekly ? periodName : monthName} BudgetSmart recap`, html, text);
 }
 
 export function sendFamilyInviteEmail(env: Env, to: string, inviterName: string, link: string): Promise<boolean> {

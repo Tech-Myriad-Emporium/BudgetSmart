@@ -137,10 +137,17 @@ export const useSummaryPrefs = (enabled: boolean) =>
 export function useSummaryMutations() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["summary-prefs"] });
-  const setEnabled = useMutation({ mutationFn: (enabled: boolean) => api.setSummaryPrefs(enabled), onSuccess: invalidate });
+  const setPrefs = useMutation({
+    mutationFn: (prefs: { enabled?: boolean; weeklyEnabled?: boolean }) => api.setSummaryPrefs(prefs),
+    onSuccess: invalidate,
+  });
   const sendNow = useMutation({ mutationFn: () => api.sendSummaryNow(), onSuccess: invalidate });
-  return { setEnabled, sendNow };
+  const sendWeeklyNow = useMutation({ mutationFn: () => api.sendWeeklyNow(), onSuccess: invalidate });
+  return { setPrefs, sendNow, sendWeeklyNow };
 }
+
+export const useWeeklyReport = () =>
+  useQuery({ queryKey: ["weekly-report"], queryFn: () => api.weeklyReport().then((r) => r.report) });
 
 export const useForecast = () =>
   useQuery({ queryKey: ["forecast"], queryFn: () => api.forecast().then((r) => r.summary) });

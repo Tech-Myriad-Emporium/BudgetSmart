@@ -78,6 +78,8 @@ export interface EmailPrefsRow {
   userId: string;
   monthlyEmail: number;
   lastSentMonth: string | null;
+  weeklyEmail: number;
+  lastSentWeek: string | null;
 }
 
 export const emailPrefs = {
@@ -87,6 +89,8 @@ export const emailPrefs = {
         userId,
         monthlyEmail: 0,
         lastSentMonth: null,
+        weeklyEmail: 0,
+        lastSentWeek: null,
       }
     );
   },
@@ -95,6 +99,17 @@ export const emailPrefs = {
       "INSERT INTO email_prefs (userId, monthlyEmail) VALUES (?, ?) ON CONFLICT(userId) DO UPDATE SET monthlyEmail = excluded.monthlyEmail",
     ).run(userId, boolToInt(enabled));
     return this.get(userId);
+  },
+  setWeeklyEnabled(userId: string, enabled: boolean): EmailPrefsRow {
+    db.prepare(
+      "INSERT INTO email_prefs (userId, monthlyEmail, weeklyEmail) VALUES (?, 0, ?) ON CONFLICT(userId) DO UPDATE SET weeklyEmail = excluded.weeklyEmail",
+    ).run(userId, boolToInt(enabled));
+    return this.get(userId);
+  },
+  markWeekSent(userId: string, week: string): void {
+    db.prepare(
+      "INSERT INTO email_prefs (userId, monthlyEmail, weeklyEmail, lastSentWeek) VALUES (?, 0, 1, ?) ON CONFLICT(userId) DO UPDATE SET lastSentWeek = excluded.lastSentWeek",
+    ).run(userId, week);
   },
   markSent(userId: string, month: string): void {
     db.prepare(

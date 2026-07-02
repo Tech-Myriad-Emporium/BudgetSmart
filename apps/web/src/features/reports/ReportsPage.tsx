@@ -3,8 +3,51 @@ import { useState } from "react";
 import { SpendDonut } from "../../components/charts";
 import { EmptyState, Money, Spinner } from "../../components/ui";
 import { api } from "../../lib/api";
-import { useReport } from "../../lib/hooks";
-import { monthAbbr } from "../../lib/format";
+import { useReport, useWeeklyReport } from "../../lib/hooks";
+import { formatDateShort, monthAbbr } from "../../lib/format";
+
+/** "This week so far" — the 7-day window ending today, vs the week before. */
+function WeeklyCard() {
+  const weekQ = useWeeklyReport();
+  const w = weekQ.data;
+  if (!w) return null;
+  const delta = w.spendingDeltaPct;
+  return (
+    <div className="card">
+      <div className="row between wrap" style={{ gap: 12 }}>
+        <div className="col">
+          <span className="card-title">📅 This week ({formatDateShort(w.weekStart)} – {formatDateShort(w.weekEnd)})</span>
+          <div className="row" style={{ gap: 24, marginTop: 10 }}>
+            <span className="text-sm">out <Money cents={w.spending} className="text-sm danger" /></span>
+            <span className="text-sm">in <Money cents={w.income} className="text-sm accent" /></span>
+            <span className="text-sm">net <Money cents={w.net} colorize className="text-sm" /></span>
+            {delta !== null && (
+              <span className={`text-xs ${delta > 0 ? "warn" : "accent"}`} style={{ alignSelf: "center" }}>
+                {delta > 0 ? "▲" : "▼"} {Math.abs(Math.round(delta * 100))}% vs last week
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="col text-xs" style={{ gap: 4, minWidth: 220 }}>
+          {w.topCategories.slice(0, 2).map((c) => (
+            <span key={c.name} className="faint">{c.icon} {c.name} · {formatMoney(c.amount)}</span>
+          ))}
+          {w.biggestPurchase && (
+            <span className="faint">💸 biggest: {w.biggestPurchase.merchant} · {formatMoney(w.biggestPurchase.amount)}</span>
+          )}
+          {w.upcomingBills.length > 0 && (
+            <span className="warn">🧾 next 7 days: {w.upcomingBills.length} bill{w.upcomingBills.length === 1 ? "" : "s"} · {formatMoney(w.upcomingBills.reduce((s2, b) => s2 + b.amount, 0))}</span>
+          )}
+          {w.budgetPace && (
+            <span className={w.budgetPace.pctUsed > w.budgetPace.pctElapsed ? "warn" : "faint"}>
+              ◫ budgets {w.budgetPace.pctUsed}% used · {w.budgetPace.pctElapsed}% of month gone
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const RANGES = [3, 6, 12];
 
@@ -35,6 +78,7 @@ export function ReportsPage() {
 
   return (
     <div className="page">
+      <WeeklyCard />
       {/* controls */}
       <div className="card">
         <div className="row between wrap" style={{ gap: 16 }}>

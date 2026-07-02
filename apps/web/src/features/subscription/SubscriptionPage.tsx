@@ -131,13 +131,14 @@ export function SubscriptionPage() {
 function MonthlyEmailCard() {
   const accountQ = useAccountLink();
   const prefsQ = useSummaryPrefs(true);
-  const { setEnabled, sendNow } = useSummaryMutations();
+  const { setPrefs, sendNow, sendWeeklyNow } = useSummaryMutations();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const linked = accountQ.data?.linked ?? false;
   const email = accountQ.data?.email;
   const enabled = prefsQ.data?.enabled ?? false;
-  const busy = setEnabled.isPending || sendNow.isPending;
+  const weeklyEnabled = prefsQ.data?.weeklyEnabled ?? false;
+  const busy = setPrefs.isPending || sendNow.isPending || sendWeeklyNow.isPending;
 
   function sendTest() {
     setMsg(null);
@@ -158,17 +159,43 @@ function MonthlyEmailCard() {
               : "Connect your BudgetSmart account above first — the recap is emailed to that address."}
           </span>
         </div>
-        <div className="row gap-sm">
-          <button className="btn btn-sm" onClick={sendTest} disabled={busy || !linked} title="Email last month's recap now">
-            {sendNow.isPending ? <span className="ring" /> : "Send now"}
-          </button>
-          <button
-            className={`btn btn-sm ${enabled ? "btn-primary" : ""}`}
-            onClick={() => setEnabled.mutate(!enabled)}
-            disabled={busy || !linked}
-          >
-            {enabled ? "✓ On — every month" : "Turn on"}
-          </button>
+        <div className="col gap-sm" style={{ alignItems: "flex-end" }}>
+          <div className="row gap-sm">
+            <button className="btn btn-sm" onClick={sendTest} disabled={busy || !linked} title="Email last month's recap now">
+              {sendNow.isPending ? <span className="ring" /> : "Send now"}
+            </button>
+            <button
+              className={`btn btn-sm ${enabled ? "btn-primary" : ""}`}
+              onClick={() => setPrefs.mutate({ enabled: !enabled })}
+              disabled={busy || !linked}
+              style={{ minWidth: 150 }}
+            >
+              {enabled ? "✓ Monthly — on" : "Monthly recap"}
+            </button>
+          </div>
+          <div className="row gap-sm">
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                sendWeeklyNow.mutate(undefined, {
+                  onSuccess: (r) => setMsg({ ok: true, text: `Sent last week's recap to ${r.sentTo ?? email}.` }),
+                  onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
+                })
+              }
+              disabled={busy || !linked}
+              title="Email last week's recap now"
+            >
+              {sendWeeklyNow.isPending ? <span className="ring" /> : "Send now"}
+            </button>
+            <button
+              className={`btn btn-sm ${weeklyEnabled ? "btn-primary" : ""}`}
+              onClick={() => setPrefs.mutate({ weeklyEnabled: !weeklyEnabled })}
+              disabled={busy || !linked}
+              style={{ minWidth: 150 }}
+            >
+              {weeklyEnabled ? "✓ Weekly — on" : "Weekly recap"}
+            </button>
+          </div>
         </div>
       </div>
       {msg && (

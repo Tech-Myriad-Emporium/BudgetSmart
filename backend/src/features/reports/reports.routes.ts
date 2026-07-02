@@ -1,10 +1,11 @@
-import { buildReport } from "@budgetsmart/shared";
+import { buildReport, buildWeeklyReport } from "@budgetsmart/shared";
 import { Router } from "express";
 import { z } from "zod";
-import { accounts, categories, transactions } from "../../db/repo.js";
+import { accounts, budgets, categories, transactions } from "../../db/repo.js";
 import { asyncHandler } from "../../lib/http.js";
-import { serializeAccount, serializeCategory, serializeTransaction } from "../../lib/serialize.js";
+import { serializeAccount, serializeBudget, serializeCategory, serializeTransaction } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
+import { overridesFor } from "../recurring/recurring.routes.js";
 
 const reportSchema = z.object({
   months: z.coerce.number().int().min(1).max(24).default(6),
@@ -17,6 +18,22 @@ const csvSchema = z.object({
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
+
+/** GET /reports/weekly → this-week-so-far report (7-day window ending today). */
+reportsRouter.get(
+  "/weekly",
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    const month = new Date().toISOString().slice(0, 7);
+    const report = buildWeeklyReport({
+      transactions: transactions.allByUser(userId).map(serializeTransaction),
+      categories: categories.listByUser(userId).map(serializeCategory),
+      budgets: budgets.listByUserMonth(userId, month).map(serializeBudget),
+      recurringOverrides: overridesFor(userId),
+    });
+    res.json({ report });
+  }),
+);
 
 reportsRouter.get(
   "/",

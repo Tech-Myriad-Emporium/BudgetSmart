@@ -270,6 +270,9 @@ export function initSchema(): void {
   ensureColumn("central_link", "entToken", "entToken TEXT");
   // Budget sub-categories (nullable parent).
   ensureColumn("categories", "parentId", "parentId TEXT");
+  // Weekly email digest opt-in (added after monthly shipped).
+  ensureColumn("email_prefs", "weeklyEmail", "weeklyEmail INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("email_prefs", "lastSentWeek", "lastSentWeek TEXT");
 }
 
 initSchema();
