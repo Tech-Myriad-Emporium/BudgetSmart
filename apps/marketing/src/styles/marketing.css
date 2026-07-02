@@ -626,6 +626,12 @@ section {
 }
 .acct-input:focus { outline: none; border-color: #00ff41; }
 .acct-block { width: 100%; justify-content: center; }
+.acct-or { text-align: center; margin: 14px 0; position: relative; color: #6a6a6a; font-size: 12px; }
+.acct-or span { background: #0b0b0b; padding: 0 10px; position: relative; z-index: 1; }
+.acct-or::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #1c1c1c; }
+.acct-google { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff !important; color: #1a1a1a !important; border: none; text-decoration: none; }
+.acct-google:hover { background: #f0f0f0 !important; }
+:root[data-theme="light"] .acct-or span { background: #ffffff; }
 .acct-ghost { opacity: 0.7; }
 .acct-msg { font-size: 13px; margin: 10px 0 0; }
 .acct-msg.err { color: #ff5c5c; }

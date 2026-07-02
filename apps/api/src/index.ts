@@ -209,6 +209,7 @@ app.post("/auth/register", async (c) => {
     location: null,
     totp_secret: null,
     totp_enabled: 0,
+    google_sub: null,
   };
   await c.env.DB.prepare(
     "INSERT INTO users (id,email,password_hash,name,email_verified,tier,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -267,6 +268,76 @@ app.post("/auth/login", async (c) => {
   }
   const token = await issueToken(c.env, user);
   return c.json({ token, account: view(user, c.env) });
+});
+
+/* ------------------------------------------------------------------ *
+ * Sign in with Google (OAuth 2.0 authorization-code flow)
+ * ------------------------------------------------------------------ */
+function decodeJwtPayload(jwt: string): any {
+  let seg = jwt.split(".")[1] ?? "";
+  seg = seg.replace(/-/g, "+").replace(/_/g, "/");
+  while (seg.length % 4) seg += "=";
+  return JSON.parse(atob(seg));
+}
+const googleRedirect = (env: Env) => `${env.API_ORIGIN}/auth/google/callback`;
+
+app.get("/auth/google/start", async (c) => {
+  if (!c.env.GOOGLE_CLIENT_ID) return c.json({ error: "Google sign-in isn't configured" }, 503);
+  const state = await sign({ n: randomToken(12), exp: unix() + 600 }, c.env.JWT_SECRET, "HS256");
+  const params = new URLSearchParams({
+    client_id: c.env.GOOGLE_CLIENT_ID,
+    redirect_uri: googleRedirect(c.env),
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    access_type: "online",
+    prompt: "select_account",
+  });
+  return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, 302);
+});
+
+app.get("/auth/google/callback", async (c) => {
+  const site = new URL(c.env.APP_URL).origin;
+  const fail = (why: string) => c.redirect(`${site}/account?oauth=${why}`, 302);
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  if (!code || !state) return fail("error");
+  try { await verify(state, c.env.JWT_SECRET, "HS256"); } catch { return fail("error"); }
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: c.env.GOOGLE_CLIENT_ID!,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: googleRedirect(c.env),
+      grant_type: "authorization_code",
+    }).toString(),
+  });
+  const tokens = (await tokenRes.json().catch(() => ({}))) as any;
+  if (!tokenRes.ok || !tokens.id_token) return fail("error");
+
+  const p = decodeJwtPayload(tokens.id_token);
+  const email = String(p.email ?? "").toLowerCase().trim();
+  const sub = String(p.sub ?? "");
+  const name = String(p.name ?? "There").slice(0, 80);
+  if (!email || !sub) return fail("error");
+
+  let user = await getUserByEmail(c.env, email);
+  if (!user) {
+    const id = newId();
+    await c.env.DB.prepare(
+      "INSERT INTO users (id,email,password_hash,name,email_verified,tier,created_at,updated_at,locale,theme,totp_enabled,google_sub) VALUES (?,?,?,?,1,'base',?,?,'en','dark',0,?)",
+    ).bind(id, email, "oauth:google", name, now(), now(), sub).run();
+    user = await getUserById(c.env, id);
+    await notify(c.env, id, "welcome", "Welcome to BudgetSmart 🎉", "You're signed in with Google. Choose a plan and connect the app.");
+  } else {
+    await c.env.DB.prepare("UPDATE users SET email_verified = 1, google_sub = ?, updated_at = ? WHERE id = ?").bind(sub, now(), user.id).run();
+    user = await getUserById(c.env, user.id);
+  }
+  const token = await issueToken(c.env, user!);
+  return c.redirect(`${site}/account#token=${token}`, 302);
 });
 
 app.get("/me", auth, async (c) => {

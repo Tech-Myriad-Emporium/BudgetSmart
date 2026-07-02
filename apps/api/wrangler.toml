@@ -22,6 +22,7 @@ APP_URL = "https://budgetsmarttme.com"
 API_ORIGIN = "https://budgetsmart-api.budgetsmart.workers.dev"
 EMAIL_FROM = "BudgetSmart <budgetsmart.techmyriademporium@gmail.com>"
 GMAIL_USER = "budgetsmart.techmyriademporium@gmail.com"
+GOOGLE_CLIENT_ID = "581157140324-bsc6n9hm2p5862ro04525hslhusafj66.apps.googleusercontent.com"
 # Stripe price ids (test mode) — monthly + annual per tier
 STRIPE_PRICE_IND_T1_MONTH = "price_1ToXRA0dUdkblRR7bAaOSjEM"
 STRIPE_PRICE_IND_T1_YEAR  = "price_1ToXRA0dUdkblRR7t6FF5Gca"

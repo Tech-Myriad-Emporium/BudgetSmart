@@ -10,6 +10,8 @@ export interface Env {
   GMAIL_APP_PASSWORD?: string; // Gmail App Password (secret)
   UPLOAD_TOKEN?: string; // guards the installer upload endpoints (secret)
   ENTITLEMENT_PRIVATE_KEY: string; // RSA private key (PEM) for signing entitlement tokens
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   // vars
   APP_URL: string;
   EMAIL_FROM: string;
@@ -49,6 +51,7 @@ export interface UserRow {
   location: string | null;
   totp_secret: string | null;
   totp_enabled: number;
+  google_sub: string | null;
 }
 
 /** Shape returned to clients (never leaks the password hash or TOTP secret). */
