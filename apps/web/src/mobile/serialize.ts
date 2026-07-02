@@ -58,7 +58,7 @@ export const serializeBudget = (b: BudgetRow): Budget => ({
 });
 
 export const serializeGoal = (g: GoalRow): Goal => ({
-  id: g.id, name: g.name, type: g.type as GoalType, icon: g.icon, color: g.color,
+  id: g.id, name: g.name, shared: false, type: g.type as GoalType, icon: g.icon, color: g.color,
   targetAmount: g.targetAmount, currentAmount: g.currentAmount, targetDate: g.targetDate,
   monthlyContribution: g.monthlyContribution, note: g.note, priority: g.priority, createdAt: g.createdAt,
 });

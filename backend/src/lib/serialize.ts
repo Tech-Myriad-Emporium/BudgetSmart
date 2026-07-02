@@ -158,6 +158,7 @@ export const serializeBudget = (b: BudgetRow): Budget => ({
 export const serializeGoal = (g: GoalRow): Goal => ({
   id: g.id,
   name: g.name,
+  shared: intToBool(g.shared ?? 0),
   type: g.type as GoalType,
   icon: g.icon,
   color: g.color,

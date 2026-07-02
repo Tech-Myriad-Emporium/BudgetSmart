@@ -273,6 +273,8 @@ export function initSchema(): void {
   // Weekly email digest opt-in (added after monthly shipped).
   ensureColumn("email_prefs", "weeklyEmail", "weeklyEmail INTEGER NOT NULL DEFAULT 0");
   ensureColumn("email_prefs", "lastSentWeek", "lastSentWeek TEXT");
+  // Shared (family) goals — members contribute from their wallets.
+  ensureColumn("goals", "shared", "shared INTEGER NOT NULL DEFAULT 0");
 }
 
 initSchema();

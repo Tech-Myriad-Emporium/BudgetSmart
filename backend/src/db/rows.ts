@@ -132,6 +132,7 @@ export interface GoalRow {
   userId: string;
   name: string;
   type: string;
+  shared: number;
   icon: string;
   color: string;
   targetAmount: number;

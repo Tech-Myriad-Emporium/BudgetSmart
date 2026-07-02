@@ -241,6 +241,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ kind, amount, note: note ?? null }),
     }),
+  familyGoals: () => request<{ goals: Goal[] }>("/family/goals"),
+  contributeFamilyGoal: (id: string, memberId: string, amount: number) =>
+    request<{ goal: Goal; overview: FamilyOverview }>(`/family/goals/${id}/contribute`, {
+      method: "POST",
+      body: JSON.stringify({ memberId, amount }),
+    }),
   familyChores: () => request<{ chores: Chore[] }>("/family/chores"),
   addChore: (input: { memberId: string; name: string; reward: number; repeats: boolean }) =>
     request<{ chores: Chore[] }>("/family/chores", { method: "POST", body: JSON.stringify(input) }),
@@ -350,4 +356,5 @@ export interface GoalInput {
   monthlyContribution?: number;
   note?: string | null;
   priority?: number;
+  shared?: boolean;
 }

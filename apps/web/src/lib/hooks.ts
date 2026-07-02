@@ -250,6 +250,23 @@ export function useFamilyMutations() {
   return { addMember, removeMember, addAllowance, record };
 }
 
+export const useFamilyGoals = (enabled: boolean) =>
+  useQuery({ queryKey: ["family-goals"], queryFn: () => api.familyGoals().then((r) => r.goals), enabled });
+
+export function useFamilyGoalContribution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, memberId, amount }: { id: string; memberId: string; amount: number }) =>
+      api.contributeFamilyGoal(id, memberId, amount),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["family-goals"] }),
+        qc.invalidateQueries({ queryKey: ["family"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+      ]),
+  });
+}
+
 export const useFamilyChores = (enabled: boolean) =>
   useQuery({ queryKey: ["family-chores"], queryFn: () => api.familyChores().then((r) => r.chores), enabled });
 

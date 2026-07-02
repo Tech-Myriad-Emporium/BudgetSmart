@@ -17,6 +17,8 @@ import {
   useEntitlements,
   useFamily,
   useFamilyChores,
+  useFamilyGoalContribution,
+  useFamilyGoals,
   useFamilyMutations,
   useFamilyRequests,
   useLinkAccount,
@@ -383,6 +385,8 @@ function FamilyPanel() {
         </div>
       )}
 
+      {(overview?.members.length ?? 0) > 0 && <SharedGoalsCard members={overview!.members} />}
+
       {(overview?.members.length ?? 0) > 0 && (
         <div className="grid grid-2">
           {has("chores") ? (
@@ -402,6 +406,83 @@ function FamilyPanel() {
         </div>
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared goals — members contribute from their wallets
+ * ------------------------------------------------------------------ */
+function SharedGoalsCard({ members }: { members: FamilyMember[] }) {
+  const goalsQ = useFamilyGoals(true);
+  const contribute = useFamilyGoalContribution();
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [pickers, setPickers] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const goalsList = goalsQ.data ?? [];
+  if (!goalsQ.isLoading && goalsList.length === 0) {
+    return (
+      <div className="card">
+        <span className="card-title">🎯 Shared goals</span>
+        <p className="faint text-xs" style={{ marginTop: 8 }}>
+          Mark any goal as “shared with family” on the Goals page and members can chip in from their wallets here —
+          a joint emergency fund, the family vacation, anything.
+        </p>
+      </div>
+    );
+  }
+
+  function chipIn(goalId: string) {
+    const cents = parseMoney(amounts[goalId] ?? "");
+    const memberId = pickers[goalId] || members[0]?.id;
+    if (!cents || cents <= 0 || !memberId) return;
+    setMsg(null);
+    contribute.mutate(
+      { id: goalId, memberId, amount: cents },
+      {
+        onSuccess: () => setAmounts((a) => ({ ...a, [goalId]: "" })),
+        onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
+      },
+    );
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">🎯 Shared goals</span>
+      <div className="col" style={{ marginTop: 12, gap: 14 }}>
+        {goalsList.map((g) => {
+          const pct = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
+          return (
+            <div key={g.id} className="col gap-sm">
+              <div className="row between">
+                <span className="text-sm">{g.icon} {g.name}</span>
+                <span className="faint text-xs">
+                  {formatMoney(g.currentAmount)} of {formatMoney(g.targetAmount)} · {pct}%
+                </span>
+              </div>
+              <div className="progress"><span style={{ width: `${pct}%` }} /></div>
+              <div className="row gap-sm wrap">
+                <select className="select btn-sm" style={{ width: 110 }} value={pickers[g.id] ?? members[0]?.id ?? ""}
+                  onChange={(e) => setPickers((p) => ({ ...p, [g.id]: e.target.value }))}>
+                  {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <div className="input-prefix" style={{ width: 100 }}>
+                  <span>$</span>
+                  <input className="input mono btn-sm" style={{ padding: "6px 8px 6px 22px", width: "100%" }} inputMode="decimal"
+                    placeholder="10" value={amounts[g.id] ?? ""}
+                    onChange={(e) => setAmounts((a) => ({ ...a, [g.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === "Enter" && chipIn(g.id)} />
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={() => chipIn(g.id)} disabled={contribute.isPending}>
+                  Chip in from wallet
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {msg && <div className="text-xs" style={{ color: "var(--danger)", marginTop: 8 }}>{msg.text}</div>}
+    </div>
   );
 }
 

@@ -6,10 +6,10 @@ import {
 } from "@budgetsmart/shared";
 import { Router } from "express";
 import { z } from "zod";
-import { family, users } from "../../db/repo.js";
+import { family, goals, users } from "../../db/repo.js";
 import { effectiveTier } from "../../lib/entitlement.js";
 import { ApiError, asyncHandler, routeParam } from "../../lib/http.js";
-import { serializeChore, serializeFamilyMember, serializeFamilyRequest } from "../../lib/serialize.js";
+import { serializeChore, serializeFamilyMember, serializeFamilyRequest, serializeGoal } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
 import { requireFeature } from "../../middleware/entitlements.js";
 
@@ -275,6 +275,53 @@ familyRouter.post(
     family.resolveRequest(request.id, decision.approve ? "approved" : "declined");
     res.json({
       requests: family.listRequests(userId).map(serializeFamilyRequest),
+      overview: overview(userId, ent.memberLimit),
+    });
+  }),
+);
+
+/* ------------------------------------------------------------------ *
+ * Shared goals — family members contribute from their wallets
+ * ------------------------------------------------------------------ */
+familyRouter.get(
+  "/goals",
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    res.json({ goals: goals.listByUser(userId).filter((g) => g.shared === 1).map(serializeGoal) });
+  }),
+);
+
+const contributeSchema = z.object({
+  memberId: z.string().min(1),
+  amount: z.number().int().positive("Amount must be greater than zero"),
+});
+
+/** A member chips in from their wallet; the goal advances by the same amount. */
+familyRouter.post(
+  "/goals/:id/contribute",
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    const { ent } = requireFamilyPlan(userId);
+    const goal = goals.findForUser(userId, routeParam(req, "id"));
+    if (!goal || goal.shared !== 1) throw ApiError.notFound("Shared goal not found");
+    const { memberId, amount } = contributeSchema.parse(req.body);
+    const member = family.findMember(userId, memberId);
+    if (!member) throw ApiError.notFound("Member not found");
+    const balance = serializeFamilyMember(member, family.ledger(userId, member.id)).balance;
+    if (amount > balance) throw ApiError.badRequest("That exceeds the member's wallet balance");
+
+    family.addLedgerEntry({
+      ownerId: userId,
+      memberId: member.id,
+      kind: "invest",
+      amount,
+      note: `Goal: ${goal.name}`,
+      date: new Date().toISOString().slice(0, 10),
+    });
+    const updated = goals.contribute(goal.id, amount);
+    res.json({
+      goal: serializeGoal(updated),
       overview: overview(userId, ent.memberLimit),
     });
   }),

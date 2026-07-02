@@ -19,6 +19,7 @@ const createSchema = z.object({
   monthlyContribution: z.number().int().min(0).default(0),
   note: z.string().max(500).nullable().default(null),
   priority: z.number().int().min(0).default(0),
+  shared: z.boolean().default(false),
 });
 
 const updateSchema = createSchema.partial();

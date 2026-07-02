@@ -77,7 +77,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "ac
 }
 
 function GoalCard({ goal, onEdit }: { goal: GoalWithProgress; onEdit: () => void }) {
-  const { contribute } = useGoalMutations();
+  const { contribute, update } = useGoalMutations();
   const [amount, setAmount] = useState("");
   const c = goal.computed;
   const status = STATUS_META[c.status];
@@ -100,7 +100,17 @@ function GoalCard({ goal, onEdit }: { goal: GoalWithProgress; onEdit: () => void
             <span className="text-sm truncate" style={{ fontWeight: 600 }}>
               {goal.name}
             </span>
-            <span className={`badge ${status.cls}`}>{status.label}</span>
+            <span className="row gap-sm">
+              <button
+                className={`badge text-xs ${goal.shared ? "accent" : ""}`}
+                style={{ cursor: "pointer", background: "none" }}
+                title={goal.shared ? "Shared — family members can chip in from their wallets (Plans page)" : "Share with family — members can chip in from their wallets"}
+                onClick={() => update.mutate({ id: goal.id, input: { shared: !goal.shared } })}
+              >
+                {goal.shared ? "👪 shared" : "👪 share"}
+              </button>
+              <span className={`badge ${status.cls}`}>{status.label}</span>
+            </span>
           </div>
 
           <div className="row gap-sm" style={{ alignItems: "baseline" }}>

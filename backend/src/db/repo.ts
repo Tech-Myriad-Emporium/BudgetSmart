@@ -436,15 +436,16 @@ export const goals = {
     monthlyContribution: number;
     note: string | null;
     priority: number;
+    shared?: boolean;
   }): GoalRow {
-    const r: GoalRow = { id: newId(), createdAt: nowIso(), ...input };
+    const r: GoalRow = { id: newId(), createdAt: nowIso(), ...input, shared: boolToInt(input.shared ?? false) };
     db.prepare(
       `INSERT INTO goals
-        (id,userId,name,type,icon,color,targetAmount,currentAmount,targetDate,monthlyContribution,note,priority,createdAt)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        (id,userId,name,type,icon,color,targetAmount,currentAmount,targetDate,monthlyContribution,note,priority,shared,createdAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       r.id, r.userId, r.name, r.type, r.icon, r.color, r.targetAmount, r.currentAmount,
-      r.targetDate, r.monthlyContribution, r.note, r.priority, r.createdAt,
+      r.targetDate, r.monthlyContribution, r.note, r.priority, r.shared, r.createdAt,
     );
     return r;
   },

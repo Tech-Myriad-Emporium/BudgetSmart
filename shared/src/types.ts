@@ -178,6 +178,8 @@ export interface Goal {
   note: string | null;
   /** Lower number = higher priority (drag-to-reorder later). */
   priority: number;
+  /** Shared with the family — members can contribute from their wallets. */
+  shared: boolean;
   createdAt: string;
 }
 
