@@ -294,19 +294,34 @@ function Faq() {
   );
 }
 
+const LEARN_LINKS = [
+  { href: "/budgeting-software/", label: "Budgeting software" },
+  { href: "/mint-alternative/", label: "Mint alternative" },
+  { href: "/ynab-alternative/", label: "YNAB alternative" },
+  { href: "/free-budget-app/", label: "Free budget app" },
+  { href: "/family-budget-app/", label: "Family budget app" },
+  { href: "/offline-budget-app/", label: "Offline budget app" },
+  { href: "/tme/", label: "About TME" },
+];
+
 function Footer() {
   const { t } = useI18n();
   return (
     <footer className="footer">
       <div className="wrap">
         <Brand />
-        <div className="faint">© {new Date().getFullYear()} BudgetSmart · {DOMAIN}</div>
+        <div className="faint">© {new Date().getFullYear()} BudgetSmart · Tech Myriad Emporium (TME) · {DOMAIN}</div>
         <div className="muted" style={{ display: "flex", gap: 18 }}>
           <a href="#features">{t("nav.features")}</a>
           <a href="#pricing">{t("nav.pricing")}</a>
           <a href="#download">{t("nav.download")}</a>
           <a href="#status">{t("nav.status")}</a>
         </div>
+      </div>
+      <div className="wrap footer-learn">
+        {LEARN_LINKS.map((l) => (
+          <a key={l.href} href={l.href}>{l.label}</a>
+        ))}
       </div>
     </footer>
   );

@@ -718,3 +718,8 @@ section {
 @media (max-width: 620px) {
   .acct-grid { grid-template-columns: 1fr; }
 }
+
+/* footer learn-more links (SEO internal linking) */
+.footer-learn { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #161616; }
+.footer-learn a { color: #6a6a6a; font-size: 12.5px; }
+.footer-learn a:hover { color: #00ff41; }
