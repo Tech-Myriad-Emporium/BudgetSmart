@@ -15,6 +15,7 @@ import { forecastRouter } from "./features/forecast/forecast.routes.js";
 import { gamificationRouter } from "./features/gamification/gamification.routes.js";
 import { importRouter } from "./features/import/import.routes.js";
 import { insightsRouter } from "./features/insights/insights.routes.js";
+import { pulseRouter } from "./features/pulse/pulse.routes.js";
 import { intelligenceRouter } from "./features/intelligence/intelligence.routes.js";
 import { goalsRouter } from "./features/goals/goals.routes.js";
 import { investmentsRouter } from "./features/investments/investments.routes.js";
@@ -59,6 +60,7 @@ export function createServer() {
   app.use("/api/import", requireAuth, requireFeature("import"), importRouter);
   app.use("/api/summary", requireAuth, requireFeature("monthlyEmail"), summaryRouter);
   app.use("/api/forecast", requireAuth, requireFeature("forecast"), forecastRouter);
+  app.use("/api/pulse", requireAuth, requireFeature("ai"), pulseRouter);
   app.use("/api/intelligence", requireAuth, requireFeature("intelligence"), intelligenceRouter);
   app.use("/api/investments", requireAuth, requireFeature("investments"), investmentsRouter);
   app.use("/api/networth", requireAuth, requireFeature("networth"), netWorthRouter);

@@ -109,6 +109,9 @@ export const useReport = (months: number) =>
 export const useRecurring = () =>
   useQuery({ queryKey: ["recurring"], queryFn: () => api.recurring().then((r) => r.summary) });
 
+export const usePulse = (enabled: boolean) =>
+  useQuery({ queryKey: ["pulse"], queryFn: () => api.pulse().then((r) => r.summary), enabled });
+
 export const useInsights = () =>
   useQuery({ queryKey: ["insights"], queryFn: () => api.insights().then((r) => r.summary) });
 

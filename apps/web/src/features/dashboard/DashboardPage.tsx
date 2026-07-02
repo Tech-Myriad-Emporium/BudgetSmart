@@ -1,9 +1,71 @@
-import { ACCOUNT_TYPE_LABELS } from "@budgetsmart/shared";
+import { ACCOUNT_TYPE_LABELS, formatMoney } from "@budgetsmart/shared";
 import { Link } from "react-router-dom";
 import { CashflowBars, SpendDonut } from "../../components/charts";
 import { EmptyState, Money, Spinner } from "../../components/ui";
-import { useDashboard } from "../../lib/hooks";
+import { useDashboard, useEntitlements, usePulse } from "../../lib/hooks";
 import { formatDateRelative, formatMonthLong } from "../../lib/format";
+
+/** The "smart layer": health score, why-spending-changed, alerts, daily ritual. */
+function PulseCard() {
+  const { has } = useEntitlements();
+  const pulseQ = usePulse(has("ai"));
+  if (!has("ai") || !pulseQ.data) return null;
+  const p = pulseQ.data;
+  const tone = p.health.score >= 70 ? "var(--accent)" : p.health.score >= 55 ? "#ffd600" : "var(--error)";
+  const R = 26;
+  const C = 2 * Math.PI * R;
+
+  return (
+    <div className="card">
+      <div className="row between wrap" style={{ gap: 18 }}>
+        {/* score ring */}
+        <div className="row" style={{ alignItems: "center", gap: 14 }}>
+          <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={`Financial health ${p.health.score} of 100`}>
+            <circle cx="36" cy="36" r={R} fill="none" stroke="var(--border)" strokeWidth="7" />
+            <circle
+              cx="36" cy="36" r={R} fill="none" stroke={tone} strokeWidth="7" strokeLinecap="round"
+              strokeDasharray={`${(p.health.score / 100) * C} ${C}`} transform="rotate(-90 36 36)"
+            />
+            <text x="36" y="41" textAnchor="middle" fill={tone} fontSize="18" fontWeight="700">
+              {p.health.score}
+            </text>
+          </svg>
+          <div className="col">
+            <span className="card-title">Financial health · grade {p.health.grade}</span>
+            <div className="row wrap" style={{ gap: "2px 14px", marginTop: 4 }}>
+              {p.health.components.map((c) => (
+                <span key={c.key} className="faint text-xs" title={c.detail}>
+                  {c.label} {c.points}/25
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* daily ritual */}
+        <div className="col" style={{ minWidth: 210 }}>
+          <span className="faint text-xs">
+            Today: <Money cents={p.ritual.spentToday} className="text-xs" /> spent · guide {formatMoney(p.ritual.dailyGuide)}/day
+            {p.ritual.underStreakDays > 1 && <> · 🔥 {p.ritual.underStreakDays}-day streak</>}
+          </span>
+          <span className="text-xs" style={{ marginTop: 4 }}>🎯 {p.ritual.microGoal}</span>
+        </div>
+      </div>
+
+      {(p.alerts.length > 0 || p.explanations.length > 0) && (
+        <div className="col" style={{ marginTop: 12, gap: 4 }}>
+          {p.alerts.slice(0, 3).map((a) => (
+            <span key={a.title} className={`text-xs ${a.positive ? "accent" : "warn"}`}>
+              {a.icon} <b>{a.title}</b> — {a.body}
+            </span>
+          ))}
+          {p.explanations.slice(0, 2).map((e) => (
+            <span key={e.categoryName} className="faint text-xs">{e.icon} {e.text}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const { data, isLoading, isError } = useDashboard();
@@ -16,6 +78,7 @@ export function DashboardPage() {
 
   return (
     <div className="page">
+      <PulseCard />
       {/* headline stats */}
       <div className="grid grid-3">
         <div className="card interactive">

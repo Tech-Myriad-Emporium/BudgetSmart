@@ -24,6 +24,7 @@ import type {
   NetWorthDetail,
   PayoffPlan,
   Portfolio,
+  PulseSummary,
   PurchaseRequest,
   RecurringSummary,
   ReportData,
@@ -282,6 +283,7 @@ export const api = {
     request<{ created: number }>("/import/commit", { method: "POST", body: JSON.stringify({ accountId, rows }) }),
 
   // tier intelligence
+  pulse: () => request<{ summary: PulseSummary }>("/pulse"),
   insights: () => request<{ summary: InsightsSummary }>("/insights"),
   forecast: () => request<{ summary: ForecastSummary }>("/forecast"),
   intelligence: (match?: { salary: number; contribPct: number; matchPct: number; matchCapPct: number }) =>
