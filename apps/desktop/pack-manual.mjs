@@ -48,7 +48,7 @@ if (existsSync(icoPath)) {
 console.log("5/6 dropping app into resources/app…");
 rmSync(path.join(outDir, "resources", "default_app.asar"), { force: true });
 mkdirSync(appDir, { recursive: true });
-for (const f of ["electron.js", "preload.js", "package.json"]) {
+for (const f of ["electron.js", "preload.js", "tips.js", "package.json"]) {
   cpSync(path.join(here, f), path.join(appDir, f));
 }
 // Runtime icon for the window / tray.

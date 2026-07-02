@@ -1,0 +1,62 @@
+// Loading-screen tips: a mix of money wisdom and feature discovery.
+// NOTE: apps/desktop/tips.js is generated from this file (scripts in repo run
+// the transform at build time) — edit HERE, then regenerate.
+export const TIPS: string[] = [
+  // budgeting wisdom
+  "Pay yourself first: move savings the day you're paid, then budget what's left.",
+  "A budget isn't a diet — it's a plan for saying yes to what matters.",
+  "The 50/30/20 rule: ~50% needs, 30% wants, 20% saving and debt payoff.",
+  "Small leaks sink ships: $8/day of takeout is almost $3,000 a year.",
+  "Give every dollar a job before the month starts and overspending gets rare.",
+  "Track for two weeks before judging your budget — data beats guilt.",
+  "Round your bills UP when budgeting. Surpluses feel great; shortfalls don't.",
+  "Your safe-to-spend number tells the truth even when your bank balance lies.",
+  "Budgets fail at the grocery store: shop with a list and eat before you go.",
+  "An emergency fund of even $500 prevents most debt spirals.",
+  "Aim for 3–6 months of expenses saved — build it $50 at a time.",
+  "Yearly bills? Divide by 12 and set that aside monthly — future-you says thanks.",
+  "If a category busts every month, the budget is wrong — raise it and cut elsewhere.",
+  "Cash-flow beats net worth day to day: know your paydays and your bill dates.",
+  // subscriptions & spending
+  "Audit subscriptions quarterly — the average household wastes $200+/yr on forgotten ones.",
+  "Before any purchase over $100, wait 48 hours. Most urges expire first.",
+  "Price creep is real: BudgetSmart flags bills that quietly rose so you can call and fight.",
+  "One no-spend day a week saves more than most coupon habits.",
+  "Unit price > sticker price. The big jar is not always the deal.",
+  "Annual plans usually save 15–25% — but only for things you actually keep.",
+  // debt
+  "Avalanche (highest APR first) saves the most interest; snowball (smallest first) keeps you motivated. Pick the one you'll stick to.",
+  "Even $25/mo extra on a credit card can cut years off the payoff date.",
+  "Interest never sleeps: paying debt is a guaranteed return equal to its APR.",
+  "0% promo APR? Note the expiry — the jump to 24.99% is where they make it back.",
+  "Minimum payments are designed to keep you in debt. Automate more than the minimum.",
+  "Buy-now-pay-later is still debt — four 'easy' payments can hide a busted budget.",
+  // saving & investing
+  "Time in the market beats timing the market — start small, start now.",
+  "A 1% investment fee can quietly eat six figures over a career. Check your expense ratios.",
+  "Capture your full employer 401(k) match before anything else — it's free money.",
+  "Compound interest: $100/mo at 7% is roughly $52,000 in 20 years.",
+  "Rebalance yearly — winners drift your risk higher than you chose.",
+  "Net worth = what you own minus what you owe. Watch the trend, not the day.",
+  // taxes
+  "Freelancing? Set aside 25–30% of every payment for taxes — before you spend it.",
+  "Quarterly estimated taxes are due April, June, September and January. Calendar them.",
+  "Hold investments 12+ months and gains are usually taxed at a lower rate.",
+  "Track donations, medical and education spending — deductions add up faster than you think.",
+  "A big refund means you over-withheld — that was an interest-free loan to the government.",
+  // family & habits
+  "Kids learn money by holding it: allowances with choices beat lectures.",
+  "Chores with rewards teach that money is earned — BudgetSmart pays their wallet automatically.",
+  "Couples fight less about money with a shared view and clear 'yours/mine/ours' lines.",
+  "A 30-second daily check-in beats a painful monthly reckoning.",
+  "Streaks work: staying under budget gets easier every consecutive day you do it.",
+  // BudgetSmart features
+  "Import a bank statement (CSV, OFX or QIF) and BudgetSmart auto-categorizes it from your own history.",
+  "Turn on the monthly email recap to get your month's story delivered to your inbox.",
+  "The Forecast page projects your balance 90 days out — including the dip you didn't see coming.",
+  "Insights finds duplicates, refunds and transfers so your trends stay honest.",
+  "Your financial data lives on this device — BudgetSmart works fully offline.",
+  "Set a budget with one click from Insights' auto-budget suggestions — based on your real spending.",
+  "The Intelligence page estimates your taxes, finds deductions and scripts your bill negotiations.",
+  "Family plans cover 5 people: invites by email, allowance wallets, chores and purchase approvals.",
+];

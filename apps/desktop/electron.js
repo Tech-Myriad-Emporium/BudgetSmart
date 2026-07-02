@@ -208,8 +208,30 @@ function pageShell(body) {
     )
   );
 }
+const TIPS = require("./tips.js");
 const SPLASH = pageShell(`<h1><span class="dot"></span>Starting BudgetSmart…</h1>
-  <p>Bringing up your local, private finance engine. This only takes a moment.</p>`);
+  <p>Bringing up your local, private finance engine. This only takes a moment.</p>
+  <div style="margin-top:28px;max-width:560px;width:100%">
+    <div style="border:1px solid #1f1f1f;border-radius:10px;background:#0c0c0c;padding:16px 18px;text-align:left">
+      <div style="color:${ACCENT};font-size:11px;letter-spacing:.12em;margin-bottom:6px">💡 TIP <span id="tipN"></span></div>
+      <div id="tip" style="color:#c9c9c9;font-size:13px;line-height:1.55;min-height:40px"></div>
+    </div>
+    <div style="margin-top:10px;color:#5a5a5a;font-size:12px">
+      <a href="#" id="prev" style="color:#5a5a5a;text-decoration:none;margin-right:14px">&#8249; prev</a>
+      <a href="#" id="next" style="color:${ACCENT};text-decoration:none">next &#8250;</a>
+    </div>
+  </div>
+  <script>
+    var TIPS=${JSON.stringify(TIPS)};
+    var i=Math.floor(Math.random()*TIPS.length);
+    function show(){document.getElementById("tip").textContent=TIPS[i];
+      document.getElementById("tipN").textContent=(i+1)+"/"+TIPS.length;}
+    function step(d){i=(i+d+TIPS.length)%TIPS.length;show();resetTimer();}
+    var timer;function resetTimer(){clearInterval(timer);timer=setInterval(function(){i=(i+1)%TIPS.length;show();},4500);}
+    document.getElementById("next").addEventListener("click",function(ev){ev.preventDefault();step(1);});
+    document.getElementById("prev").addEventListener("click",function(ev){ev.preventDefault();step(-1);});
+    show();resetTimer();
+  </` + `script>`);
 
 function errorPage(detail) {
   const safe = String(detail || "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
