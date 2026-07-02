@@ -4,9 +4,11 @@ import type {
   BudgetRow,
   CategoryRow,
   CentralLinkRow,
+  ChoreRow,
   DebtRow,
   FamilyLedgerRow,
   FamilyMemberRow,
+  FamilyRequestRow,
   GoalRow,
   HoldingRow,
   TransactionRow,
@@ -539,6 +541,59 @@ export const family = {
       "INSERT INTO family_ledger (id,ownerId,memberId,kind,amount,note,date,createdAt) VALUES (?,?,?,?,?,?,?,?)",
     ).run(r.id, r.ownerId, r.memberId, r.kind, r.amount, r.note, r.date, r.createdAt);
     return r;
+  },
+
+  /* ---- chores ---- */
+  listChores(ownerId: string): ChoreRow[] {
+    return rows<ChoreRow>(db.prepare("SELECT * FROM family_chores WHERE ownerId = ? ORDER BY createdAt ASC").all(ownerId));
+  },
+  findChore(ownerId: string, id: string): ChoreRow | undefined {
+    return row<ChoreRow>(db.prepare("SELECT * FROM family_chores WHERE id = ? AND ownerId = ?").get(id, ownerId));
+  },
+  addChore(input: { ownerId: string; memberId: string; name: string; reward: number; repeats: boolean }): ChoreRow {
+    const r: ChoreRow = {
+      id: newId(),
+      ownerId: input.ownerId,
+      memberId: input.memberId,
+      name: input.name,
+      reward: input.reward,
+      repeats: boolToInt(input.repeats),
+      timesDone: 0,
+      lastDoneAt: null,
+      createdAt: nowIso(),
+    };
+    db.prepare(
+      "INSERT INTO family_chores (id,ownerId,memberId,name,reward,repeats,timesDone,lastDoneAt,createdAt) VALUES (?,?,?,?,?,?,?,?,?)",
+    ).run(r.id, r.ownerId, r.memberId, r.name, r.reward, r.repeats, r.timesDone, r.lastDoneAt, r.createdAt);
+    return r;
+  },
+  completeChore(id: string): void {
+    db.prepare("UPDATE family_chores SET timesDone = timesDone + 1, lastDoneAt = ? WHERE id = ?").run(nowIso(), id);
+  },
+  removeChore(id: string): void {
+    db.prepare("DELETE FROM family_chores WHERE id = ?").run(id);
+  },
+
+  /* ---- purchase requests ---- */
+  listRequests(ownerId: string): FamilyRequestRow[] {
+    return rows<FamilyRequestRow>(
+      db.prepare(
+        "SELECT * FROM family_requests WHERE ownerId = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, createdAt DESC",
+      ).all(ownerId),
+    );
+  },
+  findRequest(ownerId: string, id: string): FamilyRequestRow | undefined {
+    return row<FamilyRequestRow>(db.prepare("SELECT * FROM family_requests WHERE id = ? AND ownerId = ?").get(id, ownerId));
+  },
+  addRequest(input: { ownerId: string; memberId: string; title: string; amount: number; note: string | null }): FamilyRequestRow {
+    const r: FamilyRequestRow = { id: newId(), status: "pending", createdAt: nowIso(), resolvedAt: null, ...input };
+    db.prepare(
+      "INSERT INTO family_requests (id,ownerId,memberId,title,amount,status,note,createdAt,resolvedAt) VALUES (?,?,?,?,?,?,?,?,?)",
+    ).run(r.id, r.ownerId, r.memberId, r.title, r.amount, r.status, r.note, r.createdAt, r.resolvedAt);
+    return r;
+  },
+  resolveRequest(id: string, status: "approved" | "declined"): void {
+    db.prepare("UPDATE family_requests SET status = ?, resolvedAt = ? WHERE id = ? AND status = 'pending'").run(status, nowIso(), id);
   },
 };
 

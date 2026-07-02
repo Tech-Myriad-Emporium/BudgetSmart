@@ -188,6 +188,32 @@ CREATE TABLE IF NOT EXISTS family_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_family_ledger_member ON family_ledger(memberId);
 
+CREATE TABLE IF NOT EXISTS family_chores (
+  id         TEXT PRIMARY KEY,
+  ownerId    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  memberId   TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  reward     INTEGER NOT NULL,
+  repeats    INTEGER NOT NULL DEFAULT 0,
+  timesDone  INTEGER NOT NULL DEFAULT 0,
+  lastDoneAt TEXT,
+  createdAt  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_family_chores_owner ON family_chores(ownerId);
+
+CREATE TABLE IF NOT EXISTS family_requests (
+  id         TEXT PRIMARY KEY,
+  ownerId    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  memberId   TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  amount     INTEGER NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'pending',
+  note       TEXT,
+  createdAt  TEXT NOT NULL,
+  resolvedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_family_requests_owner ON family_requests(ownerId);
+
 -- Link between this local account and the central BudgetSmart account (web).
 -- The central account is the source of truth for the subscription tier; on
 -- reload the app re-syncs the tier from it.

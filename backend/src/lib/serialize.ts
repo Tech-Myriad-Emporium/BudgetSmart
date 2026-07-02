@@ -7,10 +7,13 @@ import type {
   AssetClass,
   Debt,
   DebtKind,
+  Chore,
   FamilyLedgerEntry,
   FamilyLedgerKind,
   FamilyMember,
   FamilyRole,
+  PurchaseRequest,
+  PurchaseRequestStatus,
   Goal,
   GoalType,
   Holding,
@@ -24,9 +27,11 @@ import type {
   AccountRow,
   BudgetRow,
   CategoryRow,
+  ChoreRow,
   DebtRow,
   FamilyLedgerRow,
   FamilyMemberRow,
+  FamilyRequestRow,
   GoalRow,
   HoldingRow,
   TransactionRow,
@@ -79,6 +84,28 @@ export const serializeFamilyMember = (m: FamilyMemberRow, entries: FamilyLedgerR
     createdAt: m.createdAt,
   };
 };
+
+export const serializeChore = (c: ChoreRow): Chore => ({
+  id: c.id,
+  memberId: c.memberId,
+  name: c.name,
+  reward: c.reward,
+  repeats: intToBool(c.repeats),
+  timesDone: c.timesDone,
+  lastDoneAt: c.lastDoneAt,
+  createdAt: c.createdAt,
+});
+
+export const serializeFamilyRequest = (r: FamilyRequestRow): PurchaseRequest => ({
+  id: r.id,
+  memberId: r.memberId,
+  title: r.title,
+  amount: r.amount,
+  status: r.status as PurchaseRequestStatus,
+  note: r.note,
+  createdAt: r.createdAt,
+  resolvedAt: r.resolvedAt,
+});
 
 /** Account serializer needs the computed live balance passed in. */
 export const serializeAccount = (a: AccountRow, balance: number): Account => ({

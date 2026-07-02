@@ -213,6 +213,47 @@ export function useFamilyMutations() {
   return { addMember, removeMember, addAllowance, record };
 }
 
+export const useFamilyChores = (enabled: boolean) =>
+  useQuery({ queryKey: ["family-chores"], queryFn: () => api.familyChores().then((r) => r.chores), enabled });
+
+export const useFamilyRequests = (enabled: boolean) =>
+  useQuery({ queryKey: ["family-requests"], queryFn: () => api.familyRequests().then((r) => r.requests), enabled });
+
+export function useChoreMutations() {
+  const qc = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ["family-chores"] }),
+      qc.invalidateQueries({ queryKey: ["family"] }),
+    ]);
+  const add = useMutation({
+    mutationFn: (input: { memberId: string; name: string; reward: number; repeats: boolean }) => api.addChore(input),
+    onSuccess: invalidate,
+  });
+  const complete = useMutation({ mutationFn: (id: string) => api.completeChore(id), onSuccess: invalidate });
+  const remove = useMutation({ mutationFn: (id: string) => api.removeChore(id), onSuccess: invalidate });
+  return { add, complete, remove };
+}
+
+export function useRequestMutations() {
+  const qc = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ["family-requests"] }),
+      qc.invalidateQueries({ queryKey: ["family"] }),
+    ]);
+  const add = useMutation({
+    mutationFn: (input: { memberId: string; title: string; amount: number; note?: string | null }) =>
+      api.addFamilyRequest(input),
+    onSuccess: invalidate,
+  });
+  const resolve = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) => api.resolveFamilyRequest(id, approve),
+    onSuccess: invalidate,
+  });
+  return { add, resolve };
+}
+
 export const usePortfolio = () =>
   useQuery({ queryKey: ["portfolio"], queryFn: () => api.investments().then((r) => r.portfolio) });
 

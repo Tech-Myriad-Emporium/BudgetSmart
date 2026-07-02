@@ -9,8 +9,9 @@ import { z } from "zod";
 import { family, users } from "../../db/repo.js";
 import { effectiveTier } from "../../lib/entitlement.js";
 import { ApiError, asyncHandler, routeParam } from "../../lib/http.js";
-import { serializeFamilyMember } from "../../lib/serialize.js";
+import { serializeChore, serializeFamilyMember, serializeFamilyRequest } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
+import { requireFeature } from "../../middleware/entitlements.js";
 
 export const familyRouter = Router();
 familyRouter.use(requireAuth);
@@ -135,5 +136,146 @@ familyRouter.post(
       date: new Date().toISOString().slice(0, 10),
     });
     res.json({ overview: overview(userId, ent.memberLimit) });
+  }),
+);
+
+/* ------------------------------------------------------------------ *
+ * Chores & allowance automation (Family T2+)
+ * ------------------------------------------------------------------ */
+const choreSchema = z.object({
+  memberId: z.string().min(1),
+  name: z.string().min(1).max(80),
+  reward: z.number().int().positive("Reward must be greater than zero"),
+  repeats: z.boolean().default(false),
+});
+
+familyRouter.get(
+  "/chores",
+  requireFeature("chores"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    res.json({ chores: family.listChores(userId).map(serializeChore) });
+  }),
+);
+
+familyRouter.post(
+  "/chores",
+  requireFeature("chores"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    const data = choreSchema.parse(req.body);
+    if (!family.findMember(userId, data.memberId)) throw ApiError.notFound("Member not found");
+    family.addChore({ ...data, ownerId: userId });
+    res.status(201).json({ chores: family.listChores(userId).map(serializeChore) });
+  }),
+);
+
+/** Completing a chore pays the reward straight into the member's wallet. */
+familyRouter.post(
+  "/chores/:id/complete",
+  requireFeature("chores"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    const { ent } = requireFamilyPlan(userId);
+    const chore = family.findChore(userId, routeParam(req, "id"));
+    if (!chore) throw ApiError.notFound("Chore not found");
+    if (!chore.repeats && chore.timesDone > 0) throw ApiError.badRequest("That chore is already done");
+    family.completeChore(chore.id);
+    family.addLedgerEntry({
+      ownerId: userId,
+      memberId: chore.memberId,
+      kind: "allowance",
+      amount: chore.reward,
+      note: `Chore: ${chore.name}`,
+      date: new Date().toISOString().slice(0, 10),
+    });
+    res.json({
+      chores: family.listChores(userId).map(serializeChore),
+      overview: overview(userId, ent.memberLimit),
+    });
+  }),
+);
+
+familyRouter.delete(
+  "/chores/:id",
+  requireFeature("chores"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    const chore = family.findChore(userId, routeParam(req, "id"));
+    if (!chore) throw ApiError.notFound("Chore not found");
+    family.removeChore(chore.id);
+    res.json({ chores: family.listChores(userId).map(serializeChore) });
+  }),
+);
+
+/* ------------------------------------------------------------------ *
+ * Purchase approvals (Family T2+)
+ * ------------------------------------------------------------------ */
+const requestSchema = z.object({
+  memberId: z.string().min(1),
+  title: z.string().min(1).max(120),
+  amount: z.number().int().positive(),
+  note: z.string().max(200).nullable().default(null),
+});
+
+familyRouter.get(
+  "/requests",
+  requireFeature("approvals"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    res.json({ requests: family.listRequests(userId).map(serializeFamilyRequest) });
+  }),
+);
+
+familyRouter.post(
+  "/requests",
+  requireFeature("approvals"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    requireFamilyPlan(userId);
+    const data = requestSchema.parse(req.body);
+    if (!family.findMember(userId, data.memberId)) throw ApiError.notFound("Member not found");
+    family.addRequest({ ...data, ownerId: userId });
+    res.status(201).json({ requests: family.listRequests(userId).map(serializeFamilyRequest) });
+  }),
+);
+
+/** Approving spends the amount from the member's wallet; declining just closes it. */
+familyRouter.post(
+  "/requests/:id/resolve",
+  requireFeature("approvals"),
+  asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
+    const { ent } = requireFamilyPlan(userId);
+    const decision = z.object({ approve: z.boolean() }).parse(req.body);
+    const request = family.findRequest(userId, routeParam(req, "id"));
+    if (!request) throw ApiError.notFound("Request not found");
+    if (request.status !== "pending") throw ApiError.badRequest("That request was already resolved");
+
+    if (decision.approve) {
+      const member = family.findMember(userId, request.memberId);
+      if (!member) throw ApiError.notFound("Member not found");
+      const balance = serializeFamilyMember(member, family.ledger(userId, member.id)).balance;
+      if (request.amount > balance) {
+        throw ApiError.badRequest("That exceeds the member's wallet balance — add allowance first");
+      }
+      family.addLedgerEntry({
+        ownerId: userId,
+        memberId: request.memberId,
+        kind: "spend",
+        amount: request.amount,
+        note: `Approved: ${request.title}`,
+        date: new Date().toISOString().slice(0, 10),
+      });
+    }
+    family.resolveRequest(request.id, decision.approve ? "approved" : "declined");
+    res.json({
+      requests: family.listRequests(userId).map(serializeFamilyRequest),
+      overview: overview(userId, ent.memberLimit),
+    });
   }),
 );

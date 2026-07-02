@@ -701,6 +701,34 @@ export interface FamilyLedgerEntry {
   createdAt: string;
 }
 
+/** A chore the owner assigns to a member; completing it credits the wallet. */
+export interface Chore {
+  id: string;
+  memberId: string;
+  name: string;
+  reward: Cents;
+  /** Repeatable chores stay open after completion (e.g. weekly trash duty). */
+  repeats: boolean;
+  timesDone: number;
+  lastDoneAt: string | null;
+  createdAt: string;
+}
+
+export const PURCHASE_REQUEST_STATUSES = ["pending", "approved", "declined"] as const;
+export type PurchaseRequestStatus = (typeof PURCHASE_REQUEST_STATUSES)[number];
+
+/** A member's purchase request; approving deducts it from their wallet. */
+export interface PurchaseRequest {
+  id: string;
+  memberId: string;
+  title: string;
+  amount: Cents;
+  status: PurchaseRequestStatus;
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface FamilyOverview {
   members: FamilyMember[];
   memberCount: number;

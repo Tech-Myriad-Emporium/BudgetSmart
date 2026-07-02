@@ -3,18 +3,25 @@ import {
   FAMILY_ROLES,
   formatMoney,
   parseMoney,
+  type Chore,
   type FamilyMember,
   type FamilyRole,
+  type PurchaseRequest,
   type Tier,
 } from "@budgetsmart/shared";
 import { useState } from "react";
 import { EmptyState, Money, Spinner } from "../../components/ui";
 import {
   useAccountLink,
+  useChoreMutations,
+  useEntitlements,
   useFamily,
+  useFamilyChores,
   useFamilyMutations,
+  useFamilyRequests,
   useLinkAccount,
   usePlans,
+  useRequestMutations,
   useSubscription,
   useSyncAccount,
   useUnlinkAccount,
@@ -242,6 +249,7 @@ function TierCard({ tier, current, billing }: { tier: Tier; current: boolean; bi
  * ------------------------------------------------------------------ */
 function FamilyPanel() {
   const familyQ = useFamily(true);
+  const { has } = useEntitlements();
   const { addMember, removeMember } = useFamilyMutations();
   const [name, setName] = useState("");
   const [role, setRole] = useState<FamilyRole>("child");
@@ -292,7 +300,187 @@ function FamilyPanel() {
           ))}
         </div>
       )}
+
+      {(overview?.members.length ?? 0) > 0 && (
+        <div className="grid grid-2">
+          {has("chores") ? (
+            <ChoresCard members={overview!.members} />
+          ) : (
+            <div className="card">
+              <EmptyState icon="🧹" title="Chores & allowance automation" hint="Family Tier 2 turns chores into automatic wallet payouts." />
+            </div>
+          )}
+          {has("approvals") ? (
+            <ApprovalsCard members={overview!.members} />
+          ) : (
+            <div className="card">
+              <EmptyState icon="🛒" title="Purchase approvals" hint="Family Tier 2 lets members request purchases you approve from their wallet." />
+            </div>
+          )}
+        </div>
+      )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Chores (Family T2+): completing one pays the member's wallet
+ * ------------------------------------------------------------------ */
+function ChoresCard({ members }: { members: FamilyMember[] }) {
+  const choresQ = useFamilyChores(true);
+  const { add, complete, remove } = useChoreMutations();
+  const [memberId, setMemberId] = useState(members[0]?.id ?? "");
+  const [name, setName] = useState("");
+  const [reward, setReward] = useState("");
+  const [repeats, setRepeats] = useState(true);
+
+  const memberName = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
+  const chores = choresQ.data ?? [];
+  const busy = add.isPending || complete.isPending || remove.isPending;
+
+  function create() {
+    const cents = parseMoney(reward);
+    if (!name.trim() || !memberId || !cents || cents <= 0) return;
+    add.mutate({ memberId, name: name.trim(), reward: cents, repeats }, { onSuccess: () => { setName(""); setReward(""); } });
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">🧹 Chores</span>
+      <p className="faint text-xs" style={{ margin: "6px 0 10px" }}>
+        Mark a chore done and the reward lands in their wallet automatically.
+      </p>
+      <div className="row gap-sm wrap">
+        <select className="select btn-sm" style={{ width: 110 }} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <input className="input btn-sm" style={{ flex: 1, minWidth: 120 }} placeholder="Chore (e.g. Take out trash)" value={name}
+          onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+        <div className="input-prefix" style={{ width: 90 }}>
+          <span>$</span>
+          <input className="input mono btn-sm" style={{ padding: "6px 8px 6px 22px", width: "100%" }} inputMode="decimal" placeholder="5" value={reward} onChange={(e) => setReward(e.target.value)} />
+        </div>
+        <label className="row gap-sm text-xs faint" style={{ alignItems: "center", cursor: "pointer" }}>
+          <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+          repeats
+        </label>
+        <button className="btn btn-primary btn-sm" onClick={create} disabled={busy}>+ Add</button>
+      </div>
+
+      <div className="col" style={{ marginTop: 12 }}>
+        {choresQ.isLoading ? (
+          <Spinner label="Loading chores…" />
+        ) : chores.length === 0 ? (
+          <span className="faint text-sm">No chores yet — add the first one above.</span>
+        ) : (
+          chores.map((c) => <ChoreRow key={c.id} chore={c} memberName={memberName(c.memberId)} busy={busy}
+            onComplete={() => complete.mutate(c.id)} onRemove={() => remove.mutate(c.id)} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChoreRow({ chore: c, memberName, busy, onComplete, onRemove }: {
+  chore: Chore; memberName: string; busy: boolean; onComplete: () => void; onRemove: () => void;
+}) {
+  const done = !c.repeats && c.timesDone > 0;
+  return (
+    <div className="row between" style={{ padding: "9px 0", borderBottom: "1px solid var(--border)", opacity: done ? 0.55 : 1 }}>
+      <div className="col" style={{ minWidth: 0 }}>
+        <span className="text-sm truncate">{done ? "✅ " : ""}{c.name}</span>
+        <span className="faint text-xs">
+          {memberName} · {formatMoney(c.reward)}{c.repeats ? " · repeats" : ""}{c.timesDone > 0 ? ` · done ${c.timesDone}×` : ""}
+        </span>
+      </div>
+      <div className="row gap-sm">
+        {!done && (
+          <button className="btn btn-primary btn-sm" onClick={onComplete} disabled={busy} title="Pay the reward into the wallet">
+            ✓ Done
+          </button>
+        )}
+        <button className="btn btn-ghost btn-sm btn-danger" onClick={onRemove} disabled={busy} title="Remove chore">✕</button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Purchase approvals (Family T2+)
+ * ------------------------------------------------------------------ */
+function ApprovalsCard({ members }: { members: FamilyMember[] }) {
+  const requestsQ = useFamilyRequests(true);
+  const { add, resolve } = useRequestMutations();
+  const [memberId, setMemberId] = useState(members[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const memberName = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
+  const requests = requestsQ.data ?? [];
+  const busy = add.isPending || resolve.isPending;
+
+  function create() {
+    const cents = parseMoney(amount);
+    if (!title.trim() || !memberId || !cents || cents <= 0) return;
+    add.mutate({ memberId, title: title.trim(), amount: cents }, { onSuccess: () => { setTitle(""); setAmount(""); } });
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">🛒 Purchase approvals</span>
+      <p className="faint text-xs" style={{ margin: "6px 0 10px" }}>
+        Log what a member wants to buy; approving spends it from their wallet.
+      </p>
+      <div className="row gap-sm wrap">
+        <select className="select btn-sm" style={{ width: 110 }} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <input className="input btn-sm" style={{ flex: 1, minWidth: 120 }} placeholder="What do they want? (e.g. Roblox card)" value={title}
+          onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+        <div className="input-prefix" style={{ width: 90 }}>
+          <span>$</span>
+          <input className="input mono btn-sm" style={{ padding: "6px 8px 6px 22px", width: "100%" }} inputMode="decimal" placeholder="25" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={create} disabled={busy}>+ Request</button>
+      </div>
+
+      <div className="col" style={{ marginTop: 12 }}>
+        {requestsQ.isLoading ? (
+          <Spinner label="Loading requests…" />
+        ) : requests.length === 0 ? (
+          <span className="faint text-sm">No purchase requests yet.</span>
+        ) : (
+          requests.map((r) => <RequestRow key={r.id} request={r} memberName={memberName(r.memberId)} busy={busy}
+            onResolve={(approve) => resolve.mutate({ id: r.id, approve })} />)
+        )}
+      </div>
+      {resolve.isError && (
+        <div className="text-xs" style={{ color: "var(--danger)", marginTop: 8 }}>{(resolve.error as Error).message}</div>
+      )}
+    </div>
+  );
+}
+
+function RequestRow({ request: r, memberName, busy, onResolve }: {
+  request: PurchaseRequest; memberName: string; busy: boolean; onResolve: (approve: boolean) => void;
+}) {
+  const pending = r.status === "pending";
+  return (
+    <div className="row between" style={{ padding: "9px 0", borderBottom: "1px solid var(--border)", opacity: pending ? 1 : 0.55 }}>
+      <div className="col" style={{ minWidth: 0 }}>
+        <span className="text-sm truncate">{r.title}</span>
+        <span className="faint text-xs">
+          {memberName} · <Money cents={r.amount} className="text-xs" />
+          {!pending && ` · ${r.status === "approved" ? "✅ approved" : "🚫 declined"}`}
+        </span>
+      </div>
+      {pending && (
+        <div className="row gap-sm">
+          <button className="btn btn-primary btn-sm" onClick={() => onResolve(true)} disabled={busy}>Approve</button>
+          <button className="btn btn-ghost btn-sm btn-danger" onClick={() => onResolve(false)} disabled={busy}>Decline</button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -43,6 +43,30 @@ export interface FamilyLedgerRow {
   createdAt: string;
 }
 
+export interface ChoreRow {
+  id: string;
+  ownerId: string;
+  memberId: string;
+  name: string;
+  reward: number;
+  repeats: number;
+  timesDone: number;
+  lastDoneAt: string | null;
+  createdAt: string;
+}
+
+export interface FamilyRequestRow {
+  id: string;
+  ownerId: string;
+  memberId: string;
+  title: string;
+  amount: number;
+  status: string;
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface AccountRow {
   id: string;
   userId: string;

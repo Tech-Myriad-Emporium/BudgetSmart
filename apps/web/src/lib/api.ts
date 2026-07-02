@@ -10,6 +10,7 @@ import type {
   Entitlements,
   FamilyOverview,
   Feature,
+  Chore,
   CsvMapping,
   ForecastSummary,
   GamificationState,
@@ -23,6 +24,7 @@ import type {
   NetWorthDetail,
   PayoffPlan,
   Portfolio,
+  PurchaseRequest,
   RecurringSummary,
   ReportData,
   SafeToSpend,
@@ -236,6 +238,23 @@ export const api = {
     request<{ overview: FamilyOverview }>(`/family/members/${id}/record`, {
       method: "POST",
       body: JSON.stringify({ kind, amount, note: note ?? null }),
+    }),
+  familyChores: () => request<{ chores: Chore[] }>("/family/chores"),
+  addChore: (input: { memberId: string; name: string; reward: number; repeats: boolean }) =>
+    request<{ chores: Chore[] }>("/family/chores", { method: "POST", body: JSON.stringify(input) }),
+  completeChore: (id: string) =>
+    request<{ chores: Chore[]; overview: FamilyOverview }>(`/family/chores/${id}/complete`, { method: "POST" }),
+  removeChore: (id: string) => request<{ chores: Chore[] }>(`/family/chores/${id}`, { method: "DELETE" }),
+  familyRequests: () => request<{ requests: PurchaseRequest[] }>("/family/requests"),
+  addFamilyRequest: (input: { memberId: string; title: string; amount: number; note?: string | null }) =>
+    request<{ requests: PurchaseRequest[] }>("/family/requests", {
+      method: "POST",
+      body: JSON.stringify({ ...input, note: input.note ?? null }),
+    }),
+  resolveFamilyRequest: (id: string, approve: boolean) =>
+    request<{ requests: PurchaseRequest[]; overview: FamilyOverview }>(`/family/requests/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ approve }),
     }),
 
   // gamification

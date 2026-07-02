@@ -230,6 +230,8 @@ export const FEATURES: Feature[] = [
   { key: "intelligence", label: "Money intelligence", description: "Tax, debt, investment & life intelligence", level: 3 },
   // Family plans only
   { key: "family", label: "Family management", description: "Up to 5 members, allowances, overview", level: 1, familyOnly: true },
+  { key: "chores", label: "Chores & allowance automation", description: "Assign chores; completing them pays the wallet", level: 2, familyOnly: true },
+  { key: "approvals", label: "Purchase approvals", description: "Members request, you approve — straight from the wallet", level: 2, familyOnly: true },
 ];
 
 export const featureByKey = (key: string): Feature | undefined => FEATURES.find((f) => f.key === key);
