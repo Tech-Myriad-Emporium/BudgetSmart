@@ -50,3 +50,17 @@ export function sendVerificationEmail(env: Env, to: string, name: string, link: 
   const text = `${greeting}\n\nVerify your BudgetSmart email by opening this link:\n${link}\n`;
   return send(env, to, "Verify your BudgetSmart email", html, text);
 }
+
+export function sendFamilyInviteEmail(env: Env, to: string, inviterName: string, link: string): Promise<boolean> {
+  const who = inviterName || "Someone";
+  const html = wrap(
+    `You've been invited to join ${who}'s family`,
+    `<p><strong>${who}</strong> has invited you to join their BudgetSmart family plan.</p>
+     <p>Accept to share the family's premium features — shared budgets, goals and more.</p>
+     <p style="margin:24px 0"><a href="${link}" style="background:#00FF41;color:#000;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;display:inline-block">Accept invite</a></p>
+     <p style="color:#9a9a9a;font-size:13px">Or paste this link into your browser:<br><span style="color:#00FF41">${link}</span></p>
+     <p style="color:#9a9a9a;font-size:13px">Sign in (or create a free account) with <strong>${to}</strong> to accept. This invite expires in 14 days.</p>`,
+  );
+  const text = `${who} has invited you to join their BudgetSmart family plan.\n\nAccept here:\n${link}\n\nSign in (or create a free account) with ${to} to accept. Expires in 14 days.\n`;
+  return send(env, to, `You're invited to join ${who}'s BudgetSmart family`, html, text);
+}

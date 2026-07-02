@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { hashPassword, verifyPassword, randomToken, newId } from "./crypto.js";
-import { sendVerificationEmail } from "./email.js";
+import { sendVerificationEmail, sendFamilyInviteEmail } from "./email.js";
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
 import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
@@ -37,6 +37,32 @@ function view(u: UserRow, env: Env): AccountView {
     location: u.location ?? null,
     twoFactorEnabled: u.totp_enabled === 1,
   };
+}
+
+/** A non-owner family member inherits the owner's family tier while the owner's
+ *  subscription is live. Owners (and everyone else) keep their own tier. */
+async function familyTierFor(env: Env, userId: string): Promise<string | null> {
+  const row = await env.DB.prepare(
+    `SELECT o.tier AS tier, o.subscription_status AS status
+       FROM family_members m
+       JOIN families f ON f.id = m.family_id
+       JOIN users o ON o.id = f.owner_id
+      WHERE m.user_id = ? AND m.role = 'member'
+      LIMIT 1`,
+  ).bind(userId).first<{ tier: string; status: string | null }>();
+  if (row && row.tier.startsWith("fam_") && (row.status === "active" || row.status === "trialing")) return row.tier;
+  return null;
+}
+
+/** Effective tier = inherited family tier if any, otherwise the user's own. */
+async function resolveTier(env: Env, u: UserRow): Promise<string> {
+  if (u.tier.startsWith("fam_")) return u.tier; // owner already has it
+  return (await familyTierFor(env, u.id)) ?? u.tier;
+}
+
+/** Client-facing account view with the effective (possibly inherited) tier. */
+async function accountView(env: Env, u: UserRow): Promise<AccountView> {
+  return { ...view(u, env), tier: await resolveTier(env, u) };
 }
 
 const getUserByEmail = (env: Env, email: string) =>
@@ -276,7 +302,7 @@ app.post("/auth/login", async (c) => {
     return c.json({ twoFactor: true, challenge });
   }
   const token = await issueToken(c.env, user);
-  return c.json({ token, account: view(user, c.env) });
+  return c.json({ token, account: await accountView(c.env, user) });
 });
 
 /** Redeem a 2FA challenge with a 6-digit authenticator code for a real session. */
@@ -295,7 +321,7 @@ app.post("/auth/2fa/verify", async (c) => {
     return c.json({ error: "Incorrect code — check your authenticator app" }, 401);
   }
   const token = await issueToken(c.env, user);
-  return c.json({ token, account: view(user, c.env) });
+  return c.json({ token, account: await accountView(c.env, user) });
 });
 
 /* ------------------------------------------------------------------ *
@@ -371,7 +397,7 @@ app.get("/auth/google/callback", async (c) => {
 app.get("/me", auth, async (c) => {
   const user = await getUserById(c.env, c.get("userId"));
   if (!user) return c.json({ error: "Not found" }, 404);
-  return c.json({ account: view(user, c.env) });
+  return c.json({ account: await accountView(c.env, user) });
 });
 
 /** Update editable profile fields (name, birthday, location, locale, theme). */
@@ -395,7 +421,7 @@ app.post("/account/profile", auth, async (c) => {
     await c.env.DB.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).bind(...vals).run();
   }
   const updated = await getUserById(c.env, user.id);
-  return c.json({ account: view(updated!, c.env) });
+  return c.json({ account: await accountView(c.env, updated!) });
 });
 
 /** Upload a profile picture (PNG/JPEG/WebP data URL, ≤2MB) → R2. */
@@ -410,7 +436,7 @@ app.post("/account/avatar", auth, async (c) => {
   await c.env.DOWNLOADS.put(`avatars/${user.id}`, bytes, { httpMetadata: { contentType: m[1] } });
   await c.env.DB.prepare("UPDATE users SET avatar_key = ?, updated_at = ? WHERE id = ?").bind(`avatars/${user.id}`, now(), user.id).run();
   const updated = await getUserById(c.env, user.id);
-  return c.json({ account: view(updated!, c.env) });
+  return c.json({ account: await accountView(c.env, updated!) });
 });
 
 /* ------------------------------------------------------------------ *
@@ -436,7 +462,7 @@ app.post("/account/2fa/enable", auth, async (c) => {
   await c.env.DB.prepare("UPDATE users SET totp_enabled = 1, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
   await notify(c.env, user.id, "security", "Two-factor authentication enabled", "Your account now asks for a 6-digit code when you sign in.");
   const updated = await getUserById(c.env, user.id);
-  return c.json({ account: view(updated!, c.env) });
+  return c.json({ account: await accountView(c.env, updated!) });
 });
 
 /** Turn 2FA off — requires a current code so a hijacked session can't disable it. */
@@ -450,7 +476,7 @@ app.post("/account/2fa/disable", auth, async (c) => {
   await c.env.DB.prepare("UPDATE users SET totp_enabled = 0, totp_secret = NULL, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
   await notify(c.env, user.id, "security", "Two-factor authentication disabled", "2FA is no longer required when you sign in.");
   const updated = await getUserById(c.env, user.id);
-  return c.json({ account: view(updated!, c.env) });
+  return c.json({ account: await accountView(c.env, updated!) });
 });
 
 /** Public avatar image. */
@@ -487,17 +513,171 @@ app.post("/notifications/read-all", auth, async (c) => {
   return c.json({ ok: true });
 });
 
+/* ------------------------------------------------------------------ *
+ * Family plans — the owner of a fam_* subscription shares it with up
+ * to FAMILY_SIZE people (owner included) via emailed invites.
+ * ------------------------------------------------------------------ */
+const FAMILY_SIZE = 5;
+const INVITE_TTL_SECONDS = 60 * 60 * 24 * 14; // invites last 14 days
+
+interface FamilyRow { id: string; owner_id: string; created_at: string }
+interface InviteRow { id: string; token: string; family_id: string; from_user_id: string; to_email: string; status: string; created_at: string; expires_at: number }
+
+const familyByOwner = (env: Env, ownerId: string) =>
+  env.DB.prepare("SELECT * FROM families WHERE owner_id = ?").bind(ownerId).first<FamilyRow>();
+const familyOfMember = (env: Env, userId: string) =>
+  env.DB.prepare("SELECT f.* FROM families f JOIN family_members m ON m.family_id = f.id WHERE m.user_id = ?").bind(userId).first<FamilyRow>();
+
+async function familySnapshot(env: Env, fam: FamilyRow, forOwner: boolean) {
+  const members = (
+    await env.DB.prepare(
+      `SELECT u.id, u.name, u.email, u.avatar_key, m.role, m.joined_at
+         FROM family_members m JOIN users u ON u.id = m.user_id
+        WHERE m.family_id = ? ORDER BY m.joined_at`,
+    ).bind(fam.id).all<{ id: string; name: string; email: string; avatar_key: string | null; role: string; joined_at: string }>()
+  ).results;
+  const invites = forOwner
+    ? (
+        await env.DB.prepare(
+          "SELECT id, to_email, created_at FROM family_invites WHERE family_id = ? AND status = 'pending' AND expires_at > ? ORDER BY created_at DESC",
+        ).bind(fam.id, unix()).all<{ id: string; to_email: string; created_at: string }>()
+      ).results
+    : [];
+  return {
+    id: fam.id,
+    ownerId: fam.owner_id,
+    members: members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      role: m.role,
+      joinedAt: m.joined_at,
+      avatarUrl: m.avatar_key ? `${env.API_ORIGIN}/avatar/${m.id}` : null,
+    })),
+    invites,
+    seatsLeft: Math.max(0, FAMILY_SIZE - members.length - invites.length),
+  };
+}
+
+app.get("/family", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const canOwn = user.tier.startsWith("fam_");
+  const fam = (await familyByOwner(c.env, user.id)) ?? (await familyOfMember(c.env, user.id));
+  if (!fam) return c.json({ family: null, canOwn });
+  return c.json({ family: await familySnapshot(c.env, fam, fam.owner_id === user.id), canOwn });
+});
+
+/** Owner invites someone by email; they get a link from the bot Gmail. */
+app.post("/family/invite", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  if (!user.tier.startsWith("fam_")) return c.json({ error: "Family invites need an active Family plan" }, 403);
+  const email = normEmail(String((await c.req.json().catch(() => ({}))).email ?? ""));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "Enter a valid email address" }, 400);
+  if (email === user.email) return c.json({ error: "That's you — invite someone else 🙂" }, 400);
+
+  // Create the family (with the owner as its first member) on first invite.
+  let fam = await familyByOwner(c.env, user.id);
+  if (!fam) {
+    if (await familyOfMember(c.env, user.id)) return c.json({ error: "You're already in another family" }, 400);
+    const id = newId();
+    await c.env.DB.prepare("INSERT INTO families (id, owner_id, created_at) VALUES (?,?,?)").bind(id, user.id, now()).run();
+    await c.env.DB.prepare("INSERT INTO family_members (family_id, user_id, role, joined_at) VALUES (?,?,'owner',?)").bind(id, user.id, now()).run();
+    fam = await familyByOwner(c.env, user.id);
+  }
+
+  const snap = await familySnapshot(c.env, fam!, true);
+  if (snap.seatsLeft <= 0) return c.json({ error: `Family plans cover ${FAMILY_SIZE} people — remove a member or revoke an invite first` }, 400);
+  if (snap.members.some((m) => m.email === email)) return c.json({ error: "They're already in your family" }, 400);
+  if (snap.invites.some((i) => i.to_email === email)) return c.json({ error: "They already have a pending invite" }, 400);
+  const invited = await getUserByEmail(c.env, email);
+  if (invited && (await familyOfMember(c.env, invited.id))) return c.json({ error: "They're already in a family" }, 400);
+
+  const token = randomToken(24);
+  await c.env.DB.prepare(
+    "INSERT INTO family_invites (id, token, family_id, from_user_id, to_email, status, created_at, expires_at) VALUES (?,?,?,?,?,'pending',?,?)",
+  ).bind(newId(), token, fam!.id, user.id, email, now(), unix() + INVITE_TTL_SECONDS).run();
+
+  const link = `${new URL(c.env.APP_URL).origin}/account?invite=${token}`;
+  const sent = await sendFamilyInviteEmail(c.env, email, user.name || user.email, link);
+  if (invited) {
+    await notify(c.env, invited.id, "family", `${user.name || user.email} invited you to their family`, "Open the link in your invite email to accept.");
+  }
+  return c.json({ ok: true, sent, family: await familySnapshot(c.env, fam!, true) });
+});
+
+/** Invited person accepts (must be signed in with the invited email). */
+app.post("/family/accept", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const token = String((await c.req.json().catch(() => ({}))).token ?? "");
+  const inv = await c.env.DB.prepare("SELECT * FROM family_invites WHERE token = ?").bind(token).first<InviteRow>();
+  if (!inv || inv.status !== "pending" || inv.expires_at < unix()) return c.json({ error: "This invite is no longer valid" }, 400);
+  if (inv.to_email !== user.email) {
+    return c.json({ error: `This invite was sent to ${inv.to_email} — sign in with that email to accept it` }, 403);
+  }
+  if (await familyOfMember(c.env, user.id)) return c.json({ error: "You're already in a family" }, 400);
+  const fam = await c.env.DB.prepare("SELECT * FROM families WHERE id = ?").bind(inv.family_id).first<FamilyRow>();
+  if (!fam) return c.json({ error: "This family no longer exists" }, 400);
+  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM family_members WHERE family_id = ?").bind(fam.id).first<{ n: number }>();
+  if ((count?.n ?? 0) >= FAMILY_SIZE) return c.json({ error: "This family is already full" }, 400);
+
+  await c.env.DB.prepare("INSERT INTO family_members (family_id, user_id, role, joined_at) VALUES (?,?,'member',?)").bind(fam.id, user.id, now()).run();
+  await c.env.DB.prepare("UPDATE family_invites SET status = 'accepted' WHERE id = ?").bind(inv.id).run();
+  await notify(c.env, fam.owner_id, "family", `${user.name || user.email} joined your family`, "They now share your family plan.");
+  await notify(c.env, user.id, "family", "Welcome to the family 🎉", "You share the family plan now. Reload the app to sync your new features.");
+  return c.json({ ok: true, account: await accountView(c.env, user) });
+});
+
+/** Owner cancels a pending invite. */
+app.post("/family/invite/revoke", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  const fam = user && (await familyByOwner(c.env, user.id));
+  if (!fam) return c.json({ error: "Only the family owner can do that" }, 403);
+  const id = String((await c.req.json().catch(() => ({}))).id ?? "");
+  await c.env.DB.prepare("UPDATE family_invites SET status = 'revoked' WHERE id = ? AND family_id = ? AND status = 'pending'").bind(id, fam.id).run();
+  return c.json({ ok: true, family: await familySnapshot(c.env, fam, true) });
+});
+
+/** Owner removes a member. */
+app.post("/family/remove", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  const fam = user && (await familyByOwner(c.env, user.id));
+  if (!fam) return c.json({ error: "Only the family owner can do that" }, 403);
+  const memberId = String((await c.req.json().catch(() => ({}))).userId ?? "");
+  if (memberId === user!.id) return c.json({ error: "You can't remove yourself — you own this family" }, 400);
+  const res = await c.env.DB.prepare("DELETE FROM family_members WHERE family_id = ? AND user_id = ? AND role != 'owner'").bind(fam.id, memberId).run();
+  if (res.meta.changes > 0) {
+    await notify(c.env, memberId, "family", "You've been removed from a family plan", "Your account is back on its own plan.");
+  }
+  return c.json({ ok: true, family: await familySnapshot(c.env, fam, true) });
+});
+
+/** A member leaves on their own. */
+app.post("/family/leave", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const fam = await familyOfMember(c.env, user.id);
+  if (!fam) return c.json({ error: "You're not in a family" }, 400);
+  if (fam.owner_id === user.id) return c.json({ error: "Owners can't leave their own family — cancel the plan instead" }, 400);
+  await c.env.DB.prepare("DELETE FROM family_members WHERE family_id = ? AND user_id = ?").bind(fam.id, user.id).run();
+  await notify(c.env, fam.owner_id, "family", `${user.name || user.email} left your family`, undefined);
+  return c.json({ ok: true, account: await accountView(c.env, user) });
+});
+
 /** The endpoint the desktop app polls on reload to sync its tier. */
 app.get("/entitlement", auth, async (c) => {
   const user = await getUserById(c.env, c.get("userId"));
   if (!user) return c.json({ error: "Not found" }, 404);
+  const tier = await resolveTier(c.env, user); // family members inherit the owner's tier
   return c.json({
-    tier: user.tier,
+    tier,
     subscriptionStatus: user.subscription_status,
     currentPeriodEnd: user.current_period_end,
     emailVerified: user.email_verified === 1,
     // Signed proof of entitlement the app verifies with the embedded public key.
-    token: await signEntitlement(c.env, user.id, user.tier),
+    token: await signEntitlement(c.env, user.id, tier),
   });
 });
 

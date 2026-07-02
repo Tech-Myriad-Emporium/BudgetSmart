@@ -50,12 +50,24 @@ async function api<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; 
 }
 
 /* ------------------------------------------------------------------ */
+const INVITE_KEY = "bs_invite"; // family-invite token parked until the user is signed in
+
 export function AccountPage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   async function refresh() {
     if (!getToken()) { setAccount(null); setLoading(false); return; }
+    // If they arrived through a family-invite email, accept it now that they're signed in.
+    const pending = localStorage.getItem(INVITE_KEY);
+    if (pending) {
+      localStorage.removeItem(INVITE_KEY);
+      const a = await api("/family/accept", { method: "POST", body: JSON.stringify({ token: pending }) });
+      setNotice(a.ok
+        ? { kind: "ok", text: "🎉 Family invite accepted — you now share the family plan." }
+        : { kind: "err", text: a.data.error ?? "Couldn't accept the family invite." });
+    }
     const r = await api<{ account: Account }>("/me");
     if (r.ok) { setAccount(r.data.account); applyTheme(r.data.account.theme); }
     else { localStorage.removeItem(TOKEN_KEY); setAccount(null); }
@@ -63,19 +75,21 @@ export function AccountPage() {
   }
   useEffect(() => {
     applyTheme(localStorage.getItem("bs_theme") ?? "dark");
+    // Park a family-invite token (?invite=…) so it survives login/registration.
+    const inv = new URLSearchParams(window.location.search).get("invite");
+    if (inv) localStorage.setItem(INVITE_KEY, inv);
     // Pick up the token returned by the Google OAuth callback (#token=…).
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const tok = hash.get("token");
-    if (tok) {
-      localStorage.setItem(TOKEN_KEY, tok);
-      history.replaceState(null, "", window.location.pathname);
-    }
+    if (tok) localStorage.setItem(TOKEN_KEY, tok);
+    if (inv || tok) history.replaceState(null, "", window.location.pathname);
     refresh();
   }, []);
 
   return (
     <div className="acct-wrap">
       <a className="acct-brand" href="/">Budget<span>Smart</span></a>
+      {notice && <p className={`acct-msg ${notice.kind}`} style={{ marginBottom: 14 }}>{notice.text}</p>}
       {loading ? <p className="acct-muted">Loading…</p> : account ? <AccountView account={account} onChange={refresh} /> : <AuthPanel onAuthed={refresh} />}
     </div>
   );
@@ -89,11 +103,15 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   const [busy, setBusy] = useState(false);
   const [challenge, setChallenge] = useState<string | null>(null); // set when 2FA is required
   const [code, setCode] = useState("");
-  const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(() =>
-    new URLSearchParams(window.location.search).get("oauth") === "error"
-      ? { kind: "err", text: "Google sign-in didn't complete. Please try again." }
-      : null,
-  );
+  const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(() => {
+    if (new URLSearchParams(window.location.search).get("oauth") === "error") {
+      return { kind: "err", text: "Google sign-in didn't complete. Please try again." };
+    }
+    if (localStorage.getItem(INVITE_KEY)) {
+      return { kind: "info", text: "👨‍👩‍👧‍👦 You have a family invite waiting — sign in (or create a free account) with the invited email to accept it." };
+    }
+    return null;
+  });
 
   async function submit() {
     setBusy(true); setMsg(null);
@@ -316,6 +334,100 @@ function SecuritySettings({ account, onChange }: { account: Account; onChange: (
   );
 }
 
+interface FamilyMember { id: string; name: string; email: string; role: string; joinedAt: string; avatarUrl: string | null }
+interface FamilyInvite { id: string; to_email: string; created_at: string }
+interface Family { id: string; ownerId: string; members: FamilyMember[]; invites: FamilyInvite[]; seatsLeft: number }
+
+function FamilyCard({ account, onChange }: { account: Account; onChange: () => void }) {
+  const [fam, setFam] = useState<Family | null>(null);
+  const [canOwn, setCanOwn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function load() {
+    const r = await api<{ family: Family | null; canOwn: boolean }>("/family");
+    if (r.ok) { setFam(r.data.family); setCanOwn(r.data.canOwn); }
+  }
+  useEffect(() => { load(); }, [account.tier]);
+
+  async function invite() {
+    setBusy(true); setMsg(null);
+    const r = await api<{ family: Family }>("/family/invite", { method: "POST", body: JSON.stringify({ email }) });
+    setBusy(false);
+    if (r.ok) {
+      setEmail(""); setFam(r.data.family);
+      setMsg({ kind: "ok", text: "Invite sent! It comes from our bot Gmail — tell them to check spam/junk if it doesn't show up." });
+    } else setMsg({ kind: "err", text: r.data.error ?? "Couldn't send the invite." });
+  }
+  async function revoke(id: string) {
+    const r = await api<{ family: Family }>("/family/invite/revoke", { method: "POST", body: JSON.stringify({ id }) });
+    if (r.ok) setFam(r.data.family);
+  }
+  async function remove(userId: string) {
+    const r = await api<{ family: Family }>("/family/remove", { method: "POST", body: JSON.stringify({ userId }) });
+    if (r.ok) setFam(r.data.family);
+  }
+  async function leave() {
+    setBusy(true);
+    const r = await api("/family/leave", { method: "POST" });
+    setBusy(false);
+    if (r.ok) { setFam(null); onChange(); } else setMsg({ kind: "err", text: r.data.error ?? "Couldn't leave the family." });
+  }
+
+  if (canOwn === null) return null; // still loading
+  if (!fam && !canOwn) return null; // no family plan and not in one — nothing to show
+  const isOwner = fam ? fam.ownerId === account.id : true;
+
+  return (
+    <div className="acct-card">
+      <div className="acct-row">
+        <div className="acct-muted">👨‍👩‍👧‍👦 Family {fam && <span className="acct-badge on">{fam.members.length}/5</span>}</div>
+        {fam && !isOwner && <button className="btn acct-ghost" onClick={leave} disabled={busy}>Leave family</button>}
+      </div>
+
+      {fam && (
+        <div className="acct-members">
+          {fam.members.map((m) => (
+            <div className="acct-member" key={m.id}>
+              <span className="acct-member-avatar">
+                {m.avatarUrl ? <img src={m.avatarUrl} alt="" /> : (m.name || m.email).charAt(0).toUpperCase()}
+              </span>
+              <span className="acct-member-name">{m.name || m.email}{m.id === account.id ? " (you)" : ""}</span>
+              <span className="acct-member-role">{m.role === "owner" ? "Owner" : "Member"}</span>
+              {isOwner && m.role !== "owner" && <button className="btn acct-ghost" onClick={() => remove(m.id)}>Remove</button>}
+            </div>
+          ))}
+          {isOwner && fam.invites.map((i) => (
+            <div className="acct-member pending" key={i.id}>
+              <span className="acct-member-avatar">✉️</span>
+              <span className="acct-member-name">{i.to_email}</span>
+              <span className="acct-member-role">Invited</span>
+              <button className="btn acct-ghost" onClick={() => revoke(i.id)}>Revoke</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOwner && (!fam || fam.seatsLeft > 0) && (
+        <div className="acct-invite-row">
+          <input className="acct-input" type="email" placeholder="family.member@email.com" value={email}
+            onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invite()} />
+          <button className="btn btn-primary" onClick={invite} disabled={busy || !email}>{busy ? "…" : "Invite"}</button>
+        </div>
+      )}
+      {isOwner ? (
+        <p className="acct-muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Your plan covers 5 people including you. Invites come from budgetsmart.techmyriademporium@gmail.com and expire in 14 days.
+        </p>
+      ) : fam && (
+        <p className="acct-muted" style={{ fontSize: 12, marginTop: 8 }}>You share this family's plan. The owner manages members.</p>
+      )}
+      {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -370,6 +482,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
 
       <ProfileEditor account={account} onChange={onChange} />
       <SecuritySettings account={account} onChange={onChange} />
+      <FamilyCard account={account} onChange={onChange} />
       <Notifications />
 
 
