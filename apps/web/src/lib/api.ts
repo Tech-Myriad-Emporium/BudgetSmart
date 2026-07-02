@@ -10,11 +10,14 @@ import type {
   Entitlements,
   FamilyOverview,
   Feature,
+  ForecastSummary,
   GamificationState,
   Goal,
   GoalsSummary,
   GrowthProjection,
   Holding,
+  InsightsSummary,
+  IntelligenceSummary,
   NetWorthDetail,
   PayoffPlan,
   Portfolio,
@@ -241,6 +244,12 @@ export const api = {
 
   // recurring
   recurring: () => request<{ summary: RecurringSummary }>("/recurring"),
+
+  // tier intelligence
+  insights: () => request<{ summary: InsightsSummary }>("/insights"),
+  forecast: () => request<{ summary: ForecastSummary }>("/forecast"),
+  intelligence: (match?: { salary: number; contribPct: number; matchPct: number; matchCapPct: number }) =>
+    request<{ summary: IntelligenceSummary }>(`/intelligence${match ? qs(match) : ""}`),
 
   // reports
   report: (months: number) => request<{ report: ReportData }>(`/reports${qs({ months })}`),

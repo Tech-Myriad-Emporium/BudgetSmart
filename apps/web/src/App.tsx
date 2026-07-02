@@ -8,8 +8,11 @@ import { LoginPage, RegisterPage } from "./features/auth/AuthPages";
 import { BudgetsPage } from "./features/budgets/BudgetsPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { DebtPage } from "./features/debt/DebtPage";
+import { ForecastPage } from "./features/forecast/ForecastPage";
 import { GamificationPage } from "./features/gamification/GamificationPage";
 import { GoalsPage } from "./features/goals/GoalsPage";
+import { InsightsPage } from "./features/insights/InsightsPage";
+import { IntelligencePage } from "./features/intelligence/IntelligencePage";
 import { InvestmentsPage } from "./features/investments/InvestmentsPage";
 import { NetWorthPage } from "./features/networth/NetWorthPage";
 import { RecurringPage } from "./features/recurring/RecurringPage";
@@ -45,6 +48,9 @@ export default function App() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/recurring" element={<FeatureGate feature="recurring"><RecurringPage /></FeatureGate>} />
+        <Route path="/insights" element={<FeatureGate feature="insights"><InsightsPage /></FeatureGate>} />
+        <Route path="/forecast" element={<FeatureGate feature="forecast"><ForecastPage /></FeatureGate>} />
+        <Route path="/intelligence" element={<FeatureGate feature="intelligence"><IntelligencePage /></FeatureGate>} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/debt" element={<DebtPage />} />
         <Route path="/investments" element={<FeatureGate feature="investments"><InvestmentsPage /></FeatureGate>} />

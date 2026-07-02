@@ -109,6 +109,19 @@ export const useReport = (months: number) =>
 export const useRecurring = () =>
   useQuery({ queryKey: ["recurring"], queryFn: () => api.recurring().then((r) => r.summary) });
 
+export const useInsights = () =>
+  useQuery({ queryKey: ["insights"], queryFn: () => api.insights().then((r) => r.summary) });
+
+export const useForecast = () =>
+  useQuery({ queryKey: ["forecast"], queryFn: () => api.forecast().then((r) => r.summary) });
+
+export const useIntelligence = (match?: { salary: number; contribPct: number; matchPct: number; matchCapPct: number }) =>
+  useQuery({
+    queryKey: ["intelligence", match ?? null],
+    queryFn: () => api.intelligence(match).then((r) => r.summary),
+    placeholderData: (prev) => prev,
+  });
+
 export const useNetWorth = () =>
   useQuery({ queryKey: ["networth"], queryFn: () => api.netWorth().then((r) => r.detail) });
 

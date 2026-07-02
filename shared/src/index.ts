@@ -12,3 +12,6 @@ export * from "./recurring/engine.js";
 export * from "./networth/engine.js";
 export * from "./gamification/engine.js";
 export * from "./entitlements/tiers.js";
+export * from "./insights/engine.js";
+export * from "./forecast/engine.js";
+export * from "./intelligence/engine.js";

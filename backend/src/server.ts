@@ -11,7 +11,10 @@ import { categoriesRouter } from "./features/categories/categories.routes.js";
 import { dashboardRouter } from "./features/dashboard/dashboard.routes.js";
 import { debtRouter } from "./features/debt/debt.routes.js";
 import { familyRouter } from "./features/family/family.routes.js";
+import { forecastRouter } from "./features/forecast/forecast.routes.js";
 import { gamificationRouter } from "./features/gamification/gamification.routes.js";
+import { insightsRouter } from "./features/insights/insights.routes.js";
+import { intelligenceRouter } from "./features/intelligence/intelligence.routes.js";
 import { goalsRouter } from "./features/goals/goals.routes.js";
 import { investmentsRouter } from "./features/investments/investments.routes.js";
 import { netWorthRouter } from "./features/networth/networth.routes.js";
@@ -49,6 +52,9 @@ export function createServer() {
   // 403s if the caller's tier doesn't grant the feature.
   app.use("/api/recurring", requireAuth, requireFeature("recurring"), recurringRouter);
   app.use("/api/reports", requireAuth, requireFeature("reports"), reportsRouter);
+  app.use("/api/insights", requireAuth, requireFeature("insights"), insightsRouter);
+  app.use("/api/forecast", requireAuth, requireFeature("forecast"), forecastRouter);
+  app.use("/api/intelligence", requireAuth, requireFeature("intelligence"), intelligenceRouter);
   app.use("/api/investments", requireAuth, requireFeature("investments"), investmentsRouter);
   app.use("/api/networth", requireAuth, requireFeature("networth"), netWorthRouter);
   app.use("/api/gamification", requireAuth, requireFeature("gamification"), gamificationRouter);

@@ -216,14 +216,17 @@ export const FEATURES: Feature[] = [
   // Tier 1 (level 1) — automation & insight
   { key: "recurring", label: "Recurring & subscription detection", description: "Auto-detect repeating charges", level: 1 },
   { key: "reports", label: "Reports & trends", description: "Breakdowns, cashflow, heatmap", level: 1 },
+  { key: "insights", label: "Smart cleanup & alerts", description: "Dedupe, refunds, auto-budget, auto-tag, overspend alerts", level: 1 },
   // Tier 2 (level 2) — wealth & AI
   { key: "investments", label: "Investments", description: "Portfolio, allocation & growth", level: 2 },
   { key: "networth", label: "Net worth", description: "Unified assets vs. liabilities + history", level: 2 },
   { key: "ai", label: "AI insights", description: "Advisor, optimizer, NL search", level: 2 },
+  { key: "forecast", label: "Forecast & optimization", description: "Cashflow forecast, income pacing, sinking funds", level: 2 },
   // Tier 3 (level 3) — pro suite
   { key: "gamification", label: "Rewards & gamification", description: "XP, levels, achievements", level: 3 },
   { key: "tax", label: "Tax intelligence", description: "Full federal/state tax modeling", level: 3 },
   { key: "advisor", label: "Advisor portal", description: "Share access with a pro", level: 3 },
+  { key: "intelligence", label: "Money intelligence", description: "Tax, debt, investment & life intelligence", level: 3 },
   // Family plans only
   { key: "family", label: "Family management", description: "Up to 5 members, allowances, overview", level: 1, familyOnly: true },
 ];
