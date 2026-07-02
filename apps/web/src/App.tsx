@@ -6,6 +6,7 @@ import { Spinner } from "./components/ui";
 import { AccountsPage } from "./features/accounts/AccountsPage";
 import { LoginPage, RegisterPage } from "./features/auth/AuthPages";
 import { BudgetsPage } from "./features/budgets/BudgetsPage";
+import { CalendarPage } from "./features/calendar/CalendarPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { DebtPage } from "./features/debt/DebtPage";
 import { ForecastPage } from "./features/forecast/ForecastPage";
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/recurring" element={<FeatureGate feature="recurring"><RecurringPage /></FeatureGate>} />
+        <Route path="/calendar" element={<FeatureGate feature="recurring"><CalendarPage /></FeatureGate>} />
         <Route path="/insights" element={<FeatureGate feature="insights"><InsightsPage /></FeatureGate>} />
         <Route path="/import" element={<FeatureGate feature="import"><ImportPage /></FeatureGate>} />
         <Route path="/forecast" element={<FeatureGate feature="forecast"><ForecastPage /></FeatureGate>} />
