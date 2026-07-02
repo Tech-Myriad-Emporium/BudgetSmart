@@ -33,6 +33,11 @@ function BootScreen() {
   return (
     <div className="auth-wrap">
       <div className="col" style={{ alignItems: "center", gap: 22 }}>
+        <img
+          src="/BudgetSmart.gif"
+          alt="BudgetSmart"
+          style={{ maxWidth: 480, width: "100%", borderRadius: 12, border: "1px solid var(--border)", boxShadow: "var(--shadow-glow, 0 0 24px rgba(0,255,65,.18))" }}
+        />
         <Spinner label="Booting BudgetSmart…" />
         <div className="card" style={{ maxWidth: 480, width: "100%", textAlign: "left" }}>
           <span className="accent text-xs" style={{ letterSpacing: "0.12em" }}>💡 TIP {i + 1}/{TIPS.length}</span>

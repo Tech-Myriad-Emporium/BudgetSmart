@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{height:100%;margin:0;background:#000000;color:#e6e6e6;
+    font-family:Consolas,"Cascadia Code",ui-monospace,monospace}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:28px;box-sizing:border-box}
+  img.hero{max-width:560px;width:100%;border-radius:12px;border:1px solid #1f1f1f;
+    box-shadow:0 0 24px rgba(0,255,65,.18);margin-bottom:22px}
+  h1{color:#00FF41;font-size:18px;letter-spacing:.04em;margin:0 0 10px}
+  p.sub{max-width:620px;line-height:1.5;color:#8a8a8a;font-size:13px;margin:0}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#00FF41;
+    margin-right:8px;animation:p 1s infinite alternate}
+  @keyframes p{from{opacity:.25}to{opacity:1}}
+  .tipbox{margin-top:24px;max-width:560px;width:100%;border:1px solid #1f1f1f;border-radius:10px;
+    background:#0c0c0c;padding:16px 18px;text-align:left}
+  .tiplabel{color:#00FF41;font-size:11px;letter-spacing:.12em;margin-bottom:6px}
+  #tip{color:#c9c9c9;font-size:13px;line-height:1.55;min-height:40px}
+  .tipnav{margin-top:10px;color:#5a5a5a;font-size:12px}
+  .tipnav a{text-decoration:none}
+  #prev{color:#5a5a5a;margin-right:14px}
+  #next{color:#00FF41}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="hero" src="BudgetSmart.gif" alt="BudgetSmart">
+  <h1><span class="dot"></span>Starting BudgetSmart…</h1>
+  <p class="sub">Bringing up your local, private finance engine. This only takes a moment.</p>
+  <div class="tipbox">
+    <div class="tiplabel">💡 TIP <span id="tipN"></span></div>
+    <div id="tip"></div>
+  </div>
+  <div class="tipnav"><a href="#" id="prev">‹ prev</a><a href="#" id="next">next ›</a></div>
+</div>
+<script src="tips-browser.js"></script>
+<script>
+  var i = Math.floor(Math.random() * TIPS.length);
+  function show() {
+    document.getElementById("tip").textContent = TIPS[i];
+    document.getElementById("tipN").textContent = (i + 1) + "/" + TIPS.length;
+  }
+  var timer;
+  function resetTimer() {
+    clearInterval(timer);
+    timer = setInterval(function () { i = (i + 1) % TIPS.length; show(); }, 4500);
+  }
+  function step(d) { i = (i + d + TIPS.length) % TIPS.length; show(); resetTimer(); }
+  document.getElementById("next").addEventListener("click", function (e) { e.preventDefault(); step(1); });
+  document.getElementById("prev").addEventListener("click", function (e) { e.preventDefault(); step(-1); });
+  show(); resetTimer();
+</script>
+</body>
+</html>
