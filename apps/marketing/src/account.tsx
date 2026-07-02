@@ -2,6 +2,7 @@
 // (register, email verification, login, Stripe checkout/portal). This is where a
 // user buys/manages a subscription on the web; the desktop app then syncs it.
 import { useEffect, useRef, useState } from "react";
+import { LanguagePicker, setLocale, useI18n, LOCALES, type Locale } from "./i18n";
 
 const API = "https://budgetsmart-api.budgetsmart.workers.dev";
 const TOKEN_KEY = "bs_token";
@@ -53,6 +54,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; 
 const INVITE_KEY = "bs_invite"; // family-invite token parked until the user is signed in
 
 export function AccountPage() {
+  const { t } = useI18n();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -69,8 +71,12 @@ export function AccountPage() {
         : { kind: "err", text: a.data.error ?? "Couldn't accept the family invite." });
     }
     const r = await api<{ account: Account }>("/me");
-    if (r.ok) { setAccount(r.data.account); applyTheme(r.data.account.theme); }
-    else { localStorage.removeItem(TOKEN_KEY); setAccount(null); }
+    if (r.ok) {
+      setAccount(r.data.account);
+      applyTheme(r.data.account.theme);
+      // The account's saved language wins over the local guess.
+      if (LOCALES.some((l) => l.code === r.data.account.locale)) setLocale(r.data.account.locale as Locale);
+    } else { localStorage.removeItem(TOKEN_KEY); setAccount(null); }
     setLoading(false);
   }
   useEffect(() => {
@@ -90,12 +96,13 @@ export function AccountPage() {
     <div className="acct-wrap">
       <a className="acct-brand" href="/">Budget<span>Smart</span></a>
       {notice && <p className={`acct-msg ${notice.kind}`} style={{ marginBottom: 14 }}>{notice.text}</p>}
-      {loading ? <p className="acct-muted">Loading…</p> : account ? <AccountView account={account} onChange={refresh} /> : <AuthPanel onAuthed={refresh} />}
+      {loading ? <p className="acct-muted">{t("acct.loading")}</p> : account ? <AccountView account={account} onChange={refresh} /> : <AuthPanel onAuthed={refresh} />}
     </div>
   );
 }
 
 function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -142,12 +149,12 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   if (challenge) {
     return (
       <div className="acct-card">
-        <div className="acct-muted" style={{ marginBottom: 12 }}>🔒 Two-factor authentication</div>
-        <p className="acct-muted" style={{ fontSize: 13, marginBottom: 12 }}>Enter the 6-digit code from your authenticator app.</p>
+        <div className="acct-muted" style={{ marginBottom: 12 }}>{t("acct.twofa")}</div>
+        <p className="acct-muted" style={{ fontSize: 13, marginBottom: 12 }}>{t("acct.codePrompt")}</p>
         <input className="acct-input" inputMode="numeric" autoFocus maxLength={6} placeholder="123456" value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && verify2fa()} />
-        <button className="btn btn-primary acct-block" onClick={verify2fa} disabled={busy || code.length < 6}>{busy ? "…" : "Verify"}</button>
-        <button className="btn acct-block acct-ghost" onClick={() => { setChallenge(null); setCode(""); setMsg(null); }} style={{ marginTop: 8 }}>Back</button>
+        <button className="btn btn-primary acct-block" onClick={verify2fa} disabled={busy || code.length < 6}>{busy ? "…" : t("acct.verify")}</button>
+        <button className="btn acct-block acct-ghost" onClick={() => { setChallenge(null); setCode(""); setMsg(null); }} style={{ marginTop: 8 }}>{t("acct.back")}</button>
         {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
       </div>
     );
@@ -156,17 +163,17 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   return (
     <div className="acct-card">
       <div className="acct-tabs">
-        <button className={mode === "login" ? "on" : ""} onClick={() => setMode("login")}>Sign in</button>
-        <button className={mode === "register" ? "on" : ""} onClick={() => setMode("register")}>Create account</button>
+        <button className={mode === "login" ? "on" : ""} onClick={() => setMode("login")}>{t("acct.signin")}</button>
+        <button className={mode === "register" ? "on" : ""} onClick={() => setMode("register")}>{t("acct.create")}</button>
       </div>
-      {mode === "register" && <input className="acct-input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />}
+      {mode === "register" && <input className="acct-input" placeholder={t("acct.namePh")} value={name} onChange={(e) => setName(e.target.value)} />}
       <input className="acct-input" type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input className="acct-input" type="password" placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-      <button className="btn btn-primary acct-block" onClick={submit} disabled={busy}>{busy ? "…" : mode === "login" ? "Sign in" : "Create account"}</button>
-      <div className="acct-or"><span>or</span></div>
+      <input className="acct-input" type="password" placeholder={t("acct.passPh")} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+      <button className="btn btn-primary acct-block" onClick={submit} disabled={busy}>{busy ? "…" : mode === "login" ? t("acct.signin") : t("acct.create")}</button>
+      <div className="acct-or"><span>{t("acct.or")}</span></div>
       <a className="btn acct-block acct-google" href={`${API}/auth/google/start`}>
         <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.5-5.2l-6.2-5.3C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.1-11.3-7.6l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.2 5.3C41.4 35.9 44 30.4 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
-        Continue with Google
+        {t("acct.google")}
       </a>
       {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
       {mode === "register" && (
@@ -181,6 +188,7 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
 interface Notif { id: string; type: string; title: string; body: string | null; read: number; created_at: string; }
 
 function Notifications() {
+  const { t } = useI18n();
   const [items, setItems] = useState<Notif[]>([]);
   const [unread, setUnread] = useState(0);
 
@@ -199,11 +207,11 @@ function Notifications() {
   return (
     <div className="acct-card" id="notifications">
       <div className="acct-row">
-        <div className="acct-muted">🔔 Notifications {unread > 0 && <span className="acct-badge">{unread}</span>}</div>
-        {unread > 0 && <button className="btn acct-ghost" onClick={markAll}>Mark all read</button>}
+        <div className="acct-muted">{t("acct.notifs")} {unread > 0 && <span className="acct-badge">{unread}</span>}</div>
+        {unread > 0 && <button className="btn acct-ghost" onClick={markAll}>{t("acct.markRead")}</button>}
       </div>
       {items.length === 0 ? (
-        <p className="acct-muted" style={{ marginTop: 10 }}>No notifications yet.</p>
+        <p className="acct-muted" style={{ marginTop: 10 }}>{t("acct.noNotifs")}</p>
       ) : (
         <div className="acct-notif-list">
           {items.map((n) => (
@@ -220,6 +228,7 @@ function Notifications() {
 }
 
 function ProfileEditor({ account, onChange }: { account: Account; onChange: () => void }) {
+  const { t } = useI18n();
   const [name, setName] = useState(account.name);
   const [birthday, setBirthday] = useState(account.birthday ?? "");
   const [location, setLocation] = useState(account.location ?? "");
@@ -246,7 +255,7 @@ function ProfileEditor({ account, onChange }: { account: Account; onChange: () =
   const initial = (account.name || account.email).charAt(0).toUpperCase();
   return (
     <div className="acct-card">
-      <div className="acct-muted" style={{ marginBottom: 14 }}>Your profile</div>
+      <div className="acct-muted" style={{ marginBottom: 14 }}>{t("acct.profile")}</div>
       <div className="acct-profile-row">
         <button className="acct-avatar" onClick={() => fileRef.current?.click()} title="Change photo" type="button">
           {account.avatarUrl ? <img src={account.avatarUrl} alt="avatar" /> : <span>{initial}</span>}
@@ -254,20 +263,21 @@ function ProfileEditor({ account, onChange }: { account: Account; onChange: () =
         </button>
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onFile} />
         <div className="acct-profile-fields">
-          <label className="acct-field">Name<input className="acct-input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <label className="acct-field">{t("acct.namePh")}<input className="acct-input" value={name} onChange={(e) => setName(e.target.value)} /></label>
           <div className="acct-two">
-            <label className="acct-field">Birthday<input className="acct-input" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label>
-            <label className="acct-field">Location<input className="acct-input" placeholder="City, Country" value={location} onChange={(e) => setLocation(e.target.value)} /></label>
+            <label className="acct-field">{t("acct.birthday")}<input className="acct-input" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label>
+            <label className="acct-field">{t("acct.location")}<input className="acct-input" placeholder="City, Country" value={location} onChange={(e) => setLocation(e.target.value)} /></label>
           </div>
         </div>
       </div>
-      <button className="btn btn-primary acct-block" onClick={save} disabled={busy} style={{ marginTop: 12 }}>{busy ? "…" : "Save profile"}</button>
+      <button className="btn btn-primary acct-block" onClick={save} disabled={busy} style={{ marginTop: 12 }}>{busy ? "…" : t("acct.saveProfile")}</button>
       {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
     </div>
   );
 }
 
 function SecuritySettings({ account, onChange }: { account: Account; onChange: () => void }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [setup, setSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [disabling, setDisabling] = useState(false);
@@ -302,9 +312,9 @@ function SecuritySettings({ account, onChange }: { account: Account; onChange: (
   return (
     <div className="acct-card">
       <div className="acct-row">
-        <div className="acct-muted">🔒 Two-factor authentication {account.twoFactorEnabled && <span className="acct-badge on">On</span>}</div>
-        {!account.twoFactorEnabled && !setup && <button className="btn" onClick={begin} disabled={busy}>{busy ? "…" : "Enable 2FA"}</button>}
-        {account.twoFactorEnabled && !disabling && <button className="btn acct-ghost" onClick={() => setDisabling(true)}>Turn off</button>}
+        <div className="acct-muted">{t("acct.twofa")} {account.twoFactorEnabled && <span className="acct-badge on">On</span>}</div>
+        {!account.twoFactorEnabled && !setup && <button className="btn" onClick={begin} disabled={busy}>{busy ? "…" : t("acct.enable2fa")}</button>}
+        {account.twoFactorEnabled && !disabling && <button className="btn acct-ghost" onClick={() => setDisabling(true)}>{t("acct.turnOff")}</button>}
       </div>
 
       {setup && (
@@ -322,13 +332,13 @@ function SecuritySettings({ account, onChange }: { account: Account; onChange: (
           <p className="acct-muted" style={{ fontSize: 13 }}>Enter a current code to turn 2FA off:</p>
           {codeInput}
           <div className="acct-two" style={{ marginTop: 8 }}>
-            <button className="btn btn-primary acct-block" onClick={disable} disabled={busy || code.length < 6}>{busy ? "…" : "Turn off 2FA"}</button>
-            <button className="btn acct-block acct-ghost" onClick={() => { setDisabling(false); setCode(""); setMsg(null); }}>Cancel</button>
+            <button className="btn btn-primary acct-block" onClick={disable} disabled={busy || code.length < 6}>{busy ? "…" : t("acct.turnOff")}</button>
+            <button className="btn acct-block acct-ghost" onClick={() => { setDisabling(false); setCode(""); setMsg(null); }}>{t("acct.cancel")}</button>
           </div>
         </div>
       )}
 
-      {!account.twoFactorEnabled && !setup && <p className="acct-muted" style={{ fontSize: 12, marginTop: 10 }}>Add a second step at sign-in using any authenticator app.</p>}
+      {!account.twoFactorEnabled && !setup && <p className="acct-muted" style={{ fontSize: 12, marginTop: 10 }}>{t("acct.twofaHint")}</p>}
       {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
     </div>
   );
@@ -339,6 +349,7 @@ interface FamilyInvite { id: string; to_email: string; created_at: string }
 interface Family { id: string; ownerId: string; members: FamilyMember[]; invites: FamilyInvite[]; seatsLeft: number }
 
 function FamilyCard({ account, onChange }: { account: Account; onChange: () => void }) {
+  const { t } = useI18n();
   const [fam, setFam] = useState<Family | null>(null);
   const [canOwn, setCanOwn] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
@@ -382,8 +393,8 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
   return (
     <div className="acct-card">
       <div className="acct-row">
-        <div className="acct-muted">👨‍👩‍👧‍👦 Family {fam && <span className="acct-badge on">{fam.members.length}/5</span>}</div>
-        {fam && !isOwner && <button className="btn acct-ghost" onClick={leave} disabled={busy}>Leave family</button>}
+        <div className="acct-muted">{t("acct.family")} {fam && <span className="acct-badge on">{fam.members.length}/5</span>}</div>
+        {fam && !isOwner && <button className="btn acct-ghost" onClick={leave} disabled={busy}>{t("acct.leave")}</button>}
       </div>
 
       {fam && (
@@ -393,17 +404,17 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
               <span className="acct-member-avatar">
                 {m.avatarUrl ? <img src={m.avatarUrl} alt="" /> : (m.name || m.email).charAt(0).toUpperCase()}
               </span>
-              <span className="acct-member-name">{m.name || m.email}{m.id === account.id ? " (you)" : ""}</span>
-              <span className="acct-member-role">{m.role === "owner" ? "Owner" : "Member"}</span>
-              {isOwner && m.role !== "owner" && <button className="btn acct-ghost" onClick={() => remove(m.id)}>Remove</button>}
+              <span className="acct-member-name">{m.name || m.email}{m.id === account.id ? t("acct.you") : ""}</span>
+              <span className="acct-member-role">{m.role === "owner" ? t("acct.owner") : t("acct.member")}</span>
+              {isOwner && m.role !== "owner" && <button className="btn acct-ghost" onClick={() => remove(m.id)}>{t("acct.remove")}</button>}
             </div>
           ))}
           {isOwner && fam.invites.map((i) => (
             <div className="acct-member pending" key={i.id}>
               <span className="acct-member-avatar">✉️</span>
               <span className="acct-member-name">{i.to_email}</span>
-              <span className="acct-member-role">Invited</span>
-              <button className="btn acct-ghost" onClick={() => revoke(i.id)}>Revoke</button>
+              <span className="acct-member-role">{t("acct.invited")}</span>
+              <button className="btn acct-ghost" onClick={() => revoke(i.id)}>{t("acct.revoke")}</button>
             </div>
           ))}
         </div>
@@ -413,7 +424,7 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
         <div className="acct-invite-row">
           <input className="acct-input" type="email" placeholder="family.member@email.com" value={email}
             onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invite()} />
-          <button className="btn btn-primary" onClick={invite} disabled={busy || !email}>{busy ? "…" : "Invite"}</button>
+          <button className="btn btn-primary" onClick={invite} disabled={busy || !email}>{busy ? "…" : t("acct.invite")}</button>
         </div>
       )}
       {isOwner ? (
@@ -429,6 +440,8 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
 }
 
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
+  const { t } = useI18n();
+  const translateBtn = t; // the plan map below shadows `t` with the tier variable
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [billing, setBilling] = useState<Billing>("year");
@@ -460,23 +473,24 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
       <div className="acct-card">
         <div className="acct-row">
           <div>
-            <div className="acct-muted">Signed in as</div>
+            <div className="acct-muted">{t("acct.signedInAs")}</div>
             <div className="acct-email">{account.email}</div>
             <div className="acct-muted" style={{ marginTop: 6 }}>
-              Plan: <span className="acct-accent">{currentName}</span>
+              {t("acct.plan")} <span className="acct-accent">{currentName}</span>
               {account.subscriptionStatus ? ` · ${account.subscriptionStatus}` : ""}
               {account.emailVerified ? "" : " · email unverified"}
             </div>
           </div>
           <div className="acct-actions">
-            <button className="btn acct-ghost" onClick={toggleTheme} title="Toggle light/dark">🌓 Theme</button>
-            <button className="btn" onClick={manage} disabled={busy === "portal"}>Manage billing</button>
-            <button className="btn acct-ghost" onClick={logout}>Sign out</button>
+            <LanguagePicker onPick={(l) => api("/account/profile", { method: "POST", body: JSON.stringify({ locale: l }) })} />
+            <button className="btn acct-ghost" onClick={toggleTheme} title="Toggle light/dark">{t("acct.theme")}</button>
+            <button className="btn" onClick={manage} disabled={busy === "portal"}>{t("acct.billing")}</button>
+            <button className="btn acct-ghost" onClick={logout}>{t("acct.signout")}</button>
           </div>
         </div>
         {err && <p className="acct-msg err">{err}</p>}
         <p className="acct-muted" style={{ marginTop: 12 }}>
-          After you subscribe, open the desktop app and reload — your plan syncs automatically.
+          {t("acct.syncNote")}
         </p>
       </div>
 
@@ -487,9 +501,9 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
 
 
       <div className="acct-billing-toggle">
-        <button className={billing === "month" ? "on" : ""} onClick={() => setBilling("month")}>Monthly</button>
+        <button className={billing === "month" ? "on" : ""} onClick={() => setBilling("month")}>{t("acct.monthly")}</button>
         <button className={billing === "year" ? "on" : ""} onClick={() => setBilling("year")}>
-          Yearly <span className="acct-save">save ~25%</span>
+          {t("acct.yearly")} <span className="acct-save">{t("acct.save25")}</span>
         </button>
       </div>
 
@@ -506,12 +520,12 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
                   <div className="acct-plan-price">{price}<span>{cadence}</span></div>
                   <div className="acct-plan-tag">{t.tagline}</div>
                   {account.tier === t.id ? (
-                    <button className="btn acct-block" disabled>Current plan</button>
+                    <button className="btn acct-block" disabled>{translateBtn("acct.current")}</button>
                   ) : t.id === "base" ? (
-                    <button className="btn acct-block" disabled>Free — included</button>
+                    <button className="btn acct-block" disabled>{translateBtn("acct.freeInc")}</button>
                   ) : (
                     <button className="btn btn-primary acct-block" onClick={() => buy(t.id)} disabled={busy === t.id}>
-                      {busy === t.id ? "…" : "Subscribe"}
+                      {busy === t.id ? "…" : translateBtn("acct.subscribe")}
                     </button>
                   )}
                 </div>

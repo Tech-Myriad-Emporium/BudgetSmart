@@ -567,6 +567,14 @@ section {
   display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 4px; border-radius: 999px;
   background: #00ff41; color: #000; font-size: 11px; font-weight: 700; text-align: center;
 }
+.lang-picker {
+  background: #0c0c0c; color: #e6e6e6; border: 1px solid #2a2a2a; border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.lang-picker:hover { border-color: #00ff41; }
+:root[data-theme="light"] .lang-picker { background: #fff; color: #111; border-color: #d4d4d4; }
+[dir="rtl"] .nav-links, [dir="rtl"] .acct-actions { flex-direction: row-reverse; }
+
 .acct-badge.on { background: #00ff41; }
 .acct-secret {
   display: block; margin-top: 8px; padding: 12px 14px; border-radius: 8px;
