@@ -10,6 +10,7 @@ import type {
   FamilyMemberRow,
   FamilyRequestRow,
   GoalRow,
+  RecurringOverrideRow,
   HoldingRow,
   TransactionRow,
   UserRow,
@@ -49,6 +50,24 @@ export const users = {
   },
   listAll(): UserRow[] {
     return rows<UserRow>(db.prepare("SELECT * FROM users").all());
+  },
+};
+
+/* ------------------------------------------------------------------ *
+ * Recurring-detection overrides (user customization)
+ * ------------------------------------------------------------------ */
+export const recurringOverrides = {
+  list(userId: string): RecurringOverrideRow[] {
+    return rows<RecurringOverrideRow>(db.prepare("SELECT * FROM recurring_overrides WHERE userId = ?").all(userId));
+  },
+  set(input: { userId: string; key: string; mode: string; merchant?: string | null; cadence?: string | null; amount?: number | null }): void {
+    db.prepare(
+      `INSERT INTO recurring_overrides (userId,key,mode,merchant,cadence,amount,createdAt) VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT(userId,key) DO UPDATE SET mode=excluded.mode, merchant=excluded.merchant, cadence=excluded.cadence, amount=excluded.amount`,
+    ).run(input.userId, input.key, input.mode, p(input.merchant), p(input.cadence), p(input.amount), nowIso());
+  },
+  remove(userId: string, key: string): void {
+    db.prepare("DELETE FROM recurring_overrides WHERE userId = ? AND key = ?").run(userId, key);
   },
 };
 
@@ -176,11 +195,12 @@ export const categories = {
     color: string;
     rollover: string;
     hidden: boolean;
+    parentId?: string | null;
   }): CategoryRow {
-    const r: CategoryRow = { id: newId(), createdAt: nowIso(), ...input, hidden: boolToInt(input.hidden) };
+    const r: CategoryRow = { id: newId(), createdAt: nowIso(), parentId: input.parentId ?? null, ...input, hidden: boolToInt(input.hidden) } as CategoryRow;
     db.prepare(
-      "INSERT INTO categories (id,userId,name,kind,icon,color,rollover,hidden,createdAt) VALUES (?,?,?,?,?,?,?,?,?)",
-    ).run(r.id, r.userId, r.name, r.kind, r.icon, r.color, r.rollover, r.hidden, r.createdAt);
+      "INSERT INTO categories (id,userId,name,kind,icon,color,rollover,hidden,parentId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
+    ).run(r.id, r.userId, r.name, r.kind, r.icon, r.color, r.rollover, r.hidden, r.parentId, r.createdAt);
     return r;
   },
   createMany(list: Array<{ userId: string; name: string; kind: string; icon: string; color: string; rollover: string; hidden?: boolean }>): void {
@@ -194,7 +214,7 @@ export const categories = {
   },
   update(
     id: string,
-    patch: Partial<{ name: string; kind: string; icon: string; color: string; rollover: string; hidden: boolean }>,
+    patch: Partial<{ name: string; kind: string; icon: string; color: string; rollover: string; hidden: boolean; parentId: string | null }>,
   ): CategoryRow {
     applyUpdate("categories", id, patch);
     return row<CategoryRow>(db.prepare("SELECT * FROM categories WHERE id = ?").get(id))!;

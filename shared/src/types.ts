@@ -56,6 +56,8 @@ export interface Category {
   id: string;
   name: string;
   kind: CategoryKind;
+  /** Parent category for sub-categories (one level deep), or null. */
+  parentId: string | null;
   icon: string; // emoji or icon key
   color: string; // hex
   rollover: RolloverMode;

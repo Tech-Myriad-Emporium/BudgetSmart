@@ -88,7 +88,7 @@ export function CalendarPage() {
     return <div className="page"><Spinner label="Building your calendar…" /></div>;
   }
 
-  const events = collectEvents(monthStart, recurringQ.data, has("forecast") ? forecastQ.data : undefined, goalsQ.data);
+  const events = collectEvents(monthStart, recurringQ.data?.summary, has("forecast") ? forecastQ.data : undefined, goalsQ.data);
   const monthTotal = [...events.values()].flat().filter((e) => e.kind === "bill").reduce((s, e) => s + (e.amount ?? 0), 0);
   const monthIncome = [...events.values()].flat().filter((e) => e.kind === "income").reduce((s, e) => s + (e.amount ?? 0), 0);
 
@@ -143,7 +143,7 @@ export function CalendarPage() {
             ),
           )}
         </div>
-        {(recurringQ.data?.items.length ?? 0) === 0 && (
+        {(recurringQ.data?.summary.items.length ?? 0) === 0 && (
           <div style={{ padding: 20 }}>
             <EmptyState icon="🗓" title="Nothing scheduled yet" hint="Add a few months of transactions and your bills, paychecks and goal dates will appear here automatically." />
           </div>

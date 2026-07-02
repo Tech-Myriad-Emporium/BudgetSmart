@@ -6,10 +6,62 @@ import {
   previousMonth,
   type BudgetLine,
 } from "@budgetsmart/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { EmptyState, Money, Spinner } from "../../components/ui";
+import { api } from "../../lib/api";
 import { useBudgetMutation, useBudgets, useCategories } from "../../lib/hooks";
 import { formatMonthLong } from "../../lib/format";
+
+/** Create a category (optionally as a sub-category of a root category). */
+function NewCategoryForm() {
+  const categoriesQ = useCategories();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("💸");
+  const [parentId, setParentId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const roots = (categoriesQ.data ?? []).filter((c) => c.kind === "expense" && !c.hidden && !c.parentId);
+
+  async function create() {
+    if (!name.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.createCategory({ name: name.trim(), kind: "expense", icon: icon || "💸", parentId: parentId || null });
+      setName("");
+      setParentId("");
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">New category</span>
+      <div className="row gap-sm wrap" style={{ marginTop: 12 }}>
+        <input className="input btn-sm" style={{ width: 64, textAlign: "center" }} value={icon} maxLength={4} onChange={(e) => setIcon(e.target.value)} title="Icon (emoji)" />
+        <input className="input btn-sm" style={{ flex: 1, minWidth: 160 }} placeholder="Category name (e.g. Coffee)" value={name}
+          onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+        <select className="select btn-sm" style={{ width: 190 }} value={parentId} onChange={(e) => setParentId(e.target.value)} title="Optional parent — makes this a sub-category">
+          <option value="">No parent (top-level)</option>
+          {roots.map((c) => (
+            <option key={c.id} value={c.id}>↳ under {c.icon} {c.name}</option>
+          ))}
+        </select>
+        <button className="btn btn-primary btn-sm" onClick={create} disabled={busy || !name.trim()}>+ Create</button>
+      </div>
+      {err && <div className="text-xs" style={{ color: "var(--danger)", marginTop: 8 }}>{err}</div>}
+      <div className="faint text-xs" style={{ marginTop: 8 }}>
+        Sub-categories get their own budgets and roll up visually under their parent.
+      </div>
+    </div>
+  );
+}
 
 export function BudgetsPage() {
   const [month, setMonth] = useState(currentMonth());
@@ -19,10 +71,28 @@ export function BudgetsPage() {
 
   const summary = budgetsQ.data?.summary;
   const expenseCats = (categoriesQ.data ?? []).filter((c) => c.kind === "expense" && !c.hidden);
+  const parentOf = new Map(expenseCats.map((c) => [c.id, c.parentId]));
+  const catName = new Map(expenseCats.map((c) => [c.id, c.name]));
 
   // categories with no line in the summary yet (limit 0, no spend) — offer to fund them.
   const lineIds = new Set((summary?.lines ?? []).map((l) => l.categoryId));
   const unbudgeted = expenseCats.filter((c) => !lineIds.has(c.id));
+
+  // group lines: sub-category lines follow their parent (or its slot), indented.
+  const lines = summary?.lines ?? [];
+  const rootLines = lines.filter((l) => !parentOf.get(l.categoryId));
+  const childLines = lines.filter((l) => parentOf.get(l.categoryId));
+  const ordered: Array<{ line: (typeof lines)[number]; child: boolean }> = [];
+  for (const l of rootLines) {
+    ordered.push({ line: l, child: false });
+    for (const cl of childLines.filter((c) => parentOf.get(c.categoryId) === l.categoryId)) {
+      ordered.push({ line: cl, child: true });
+    }
+  }
+  // children whose parent has no budget line yet — keep them visible at the end
+  for (const cl of childLines.filter((c) => !rootLines.some((r) => r.categoryId === parentOf.get(c.categoryId)))) {
+    ordered.push({ line: cl, child: true });
+  }
 
   return (
     <div className="page">
@@ -70,10 +140,11 @@ export function BudgetsPage() {
               {summary.lines.length === 0 && (
                 <EmptyState title="Nothing budgeted this month" hint="Fund a category below to get started." />
               )}
-              {summary.lines.map((line) => (
+              {ordered.map(({ line, child }) => (
                 <BudgetRow
                   key={line.categoryId}
                   line={line}
+                  child={child}
                   saving={setBudget.isPending}
                   onSave={(limit) => setBudget.mutate({ categoryId: line.categoryId, month, limit })}
                 />
@@ -93,7 +164,7 @@ export function BudgetsPage() {
                     onClick={() => setBudget.mutate({ categoryId: c.id, month, limit: 20000 })}
                     title="Fund with $200 to start"
                   >
-                    {c.icon} {c.name} +
+                    {c.parentId ? `${c.icon} ${catName.get(c.parentId) ?? ""} ↳ ${c.name} +` : `${c.icon} ${c.name} +`}
                   </button>
                 ))}
               </div>
@@ -102,6 +173,8 @@ export function BudgetsPage() {
               </div>
             </div>
           )}
+
+          <NewCategoryForm />
         </>
       )}
     </div>
@@ -119,10 +192,12 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "da
 
 function BudgetRow({
   line,
+  child = false,
   onSave,
   saving,
 }: {
   line: BudgetLine;
+  child?: boolean;
   onSave: (limit: number) => void;
   saving: boolean;
 }) {
@@ -138,9 +213,9 @@ function BudgetRow({
   }
 
   return (
-    <div className="ledger-row" style={{ gridTemplateColumns: "34px 1fr 200px" }}>
-      <span className="cat-icon" style={{ borderColor: line.color }}>
-        {line.icon}
+    <div className="ledger-row" style={{ gridTemplateColumns: "34px 1fr 200px", paddingLeft: child ? 30 : undefined }}>
+      <span className="cat-icon" style={{ borderColor: line.color, opacity: child ? 0.85 : 1 }}>
+        {child ? "↳" : line.icon}
       </span>
 
       <div className="col gap-sm" style={{ minWidth: 0 }}>

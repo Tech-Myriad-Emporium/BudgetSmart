@@ -7,6 +7,7 @@ import { AccountsPage } from "./features/accounts/AccountsPage";
 import { LoginPage, RegisterPage } from "./features/auth/AuthPages";
 import { BudgetsPage } from "./features/budgets/BudgetsPage";
 import { CalendarPage } from "./features/calendar/CalendarPage";
+import { CreditPage } from "./features/credit/CreditPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { DebtPage } from "./features/debt/DebtPage";
 import { ForecastPage } from "./features/forecast/ForecastPage";
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="/intelligence" element={<FeatureGate feature="intelligence"><IntelligencePage /></FeatureGate>} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/debt" element={<DebtPage />} />
+        <Route path="/credit" element={<CreditPage />} />
         <Route path="/investments" element={<FeatureGate feature="investments"><InvestmentsPage /></FeatureGate>} />
         <Route path="/networth" element={<FeatureGate feature="networth"><NetWorthPage /></FeatureGate>} />
         <Route path="/reports" element={<FeatureGate feature="reports"><ReportsPage /></FeatureGate>} />

@@ -265,7 +265,12 @@ export const api = {
   netWorth: () => request<{ detail: NetWorthDetail }>("/networth"),
 
   // recurring
-  recurring: () => request<{ summary: RecurringSummary }>("/recurring"),
+  recurring: () =>
+    request<{ summary: RecurringSummary; overrides: Array<{ key: string; mode: "always" | "never"; merchant: string | null }> }>("/recurring"),
+  setRecurringOverride: (input: { merchant: string; mode: "always" | "never"; cadence?: string; amount?: number }) =>
+    request<{ ok: boolean; key: string }>("/recurring/override", { method: "POST", body: JSON.stringify(input) }),
+  removeRecurringOverride: (key: string) =>
+    request<{ ok: boolean }>(`/recurring/override/${encodeURIComponent(key)}`, { method: "DELETE" }),
 
   // monthly email digest
   summaryPrefs: () => request<{ enabled: boolean; lastSentMonth: string | null }>("/summary/prefs"),

@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { EmptyState, Money, Spinner } from "../../components/ui";
 import { useDebtPlan, useDebts } from "../../lib/hooks";
 import { formatDateShort } from "../../lib/format";
-import { CreditCardCalculator } from "./CreditCardCalculator";
 import { DebtModal } from "./DebtModal";
 
 const fmtApr = (bps: number) => `${(bps / 100).toFixed(2)}%`;
@@ -212,7 +211,6 @@ export function DebtPage() {
         </>
       )}
 
-      <CreditCardCalculator />
 
       {modalOpen && <DebtModal existing={editing} onClose={() => setModalOpen(false)} />}
     </div>

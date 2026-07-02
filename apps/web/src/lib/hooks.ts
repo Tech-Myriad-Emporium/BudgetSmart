@@ -107,7 +107,23 @@ export const useReport = (months: number) =>
   });
 
 export const useRecurring = () =>
-  useQuery({ queryKey: ["recurring"], queryFn: () => api.recurring().then((r) => r.summary) });
+  useQuery({ queryKey: ["recurring"], queryFn: () => api.recurring() });
+
+export function useRecurringOverrides() {
+  const qc = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ["recurring"] }),
+      qc.invalidateQueries({ queryKey: ["forecast"] }),
+    ]);
+  const set = useMutation({
+    mutationFn: (input: { merchant: string; mode: "always" | "never"; cadence?: string; amount?: number }) =>
+      api.setRecurringOverride(input),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({ mutationFn: (key: string) => api.removeRecurringOverride(key), onSuccess: invalidate });
+  return { set, remove };
+}
 
 export const usePulse = (enabled: boolean) =>
   useQuery({ queryKey: ["pulse"], queryFn: () => api.pulse().then((r) => r.summary), enabled });

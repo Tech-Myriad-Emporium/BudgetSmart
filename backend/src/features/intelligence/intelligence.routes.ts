@@ -4,6 +4,7 @@ import { categories, debts, holdings, transactions } from "../../db/repo.js";
 import { asyncHandler } from "../../lib/http.js";
 import { serializeCategory, serializeDebt, serializeHolding, serializeTransaction } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
+import { overridesFor } from "../recurring/recurring.routes.js";
 
 export const intelligenceRouter = Router();
 intelligenceRouter.use(requireAuth);
@@ -40,6 +41,7 @@ intelligenceRouter.get(
       debts: debts.listByUser(userId).map(serializeDebt),
       holdings: holdings.listByUser(userId).map(serializeHolding),
       match,
+      recurringOverrides: overridesFor(userId),
     });
     res.json({ summary });
   }),

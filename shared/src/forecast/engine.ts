@@ -2,7 +2,7 @@
 // sneaky-expense detection, and the AI Budget Advisor / Savings Optimizer
 // advice feed. Pure functions over local data.
 import { sumCents, type Cents } from "../money.js";
-import { detectRecurring, normalizeMerchant } from "../recurring/engine.js";
+import { detectRecurring, normalizeMerchant, type RecurringOverride } from "../recurring/engine.js";
 import { LIABILITY_ACCOUNT_TYPES, type Account, type Category, type Transaction } from "../types.js";
 
 const DAY = 86_400_000;
@@ -96,6 +96,7 @@ export interface ForecastInput {
   accounts: Account[];
   now?: Date;
   horizonDays?: number;
+  recurringOverrides?: RecurringOverride[];
 }
 
 export function buildForecast(input: ForecastInput): ForecastSummary {
@@ -110,7 +111,7 @@ export function buildForecast(input: ForecastInput): ForecastSummary {
   );
 
   /* ---- recurring bills (reuse the detector) ---- */
-  const recurring = detectRecurring({ transactions, categories, now, upcomingDays: horizonDays });
+  const recurring = detectRecurring({ transactions, categories, now, upcomingDays: horizonDays, overrides: input.recurringOverrides });
 
   /* ---- income streams: repeating income by payer ---- */
   const incomeGroups = new Map<string, Transaction[]>();

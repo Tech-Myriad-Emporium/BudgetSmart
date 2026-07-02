@@ -122,6 +122,7 @@ export const serializeAccount = (a: AccountRow, balance: number): Account => ({
 export const serializeCategory = (c: CategoryRow): Category => ({
   id: c.id,
   name: c.name,
+  parentId: c.parentId ?? null,
   kind: c.kind as CategoryKind,
   icon: c.icon,
   color: c.color,

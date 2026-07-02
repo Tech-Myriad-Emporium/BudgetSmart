@@ -3,7 +3,7 @@
 // match, rebalancing), life-event modeling, opportunity cost, negotiation
 // scripts and impulse guard. Estimates, not tax/financial advice.
 import { sumCents, type Cents } from "../money.js";
-import { detectRecurring, normalizeMerchant } from "../recurring/engine.js";
+import { detectRecurring, normalizeMerchant, type RecurringOverride } from "../recurring/engine.js";
 import type { Category, Debt, Holding, Transaction } from "../types.js";
 
 const DAY = 86_400_000;
@@ -219,6 +219,7 @@ export interface IntelligenceInput {
   now?: Date;
   /** Optional 401(k) match check parameters. */
   match?: { salary: Cents; contribPct: number; matchPct: number; matchCapPct: number };
+  recurringOverrides?: RecurringOverride[];
 }
 
 const BNPL_PROVIDERS = /klarna|afterpay|affirm|sezzle|zip\b|paypal pay in/i;
@@ -489,7 +490,7 @@ export function buildIntelligence(input: IntelligenceInput): IntelligenceSummary
   }));
 
   // negotiation scripts for the top recurring bills
-  const recurring = detectRecurring({ transactions, categories, now });
+  const recurring = detectRecurring({ transactions, categories, now, overrides: input.recurringOverrides });
   const negotiation: NegotiationScript[] = recurring.items
     .filter((i) => i.cadence === "monthly" && i.monthlyCost >= 2_000)
     .slice(0, 3)

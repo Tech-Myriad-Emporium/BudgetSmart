@@ -2,7 +2,7 @@
 // locally (the email itself is rendered and sent by the central API — only
 // these numbers leave the device, and only when the user opts in).
 import { sumCents, type Cents } from "../money.js";
-import { detectRecurring } from "../recurring/engine.js";
+import { detectRecurring, type RecurringOverride } from "../recurring/engine.js";
 import { LIABILITY_ACCOUNT_TYPES, type Account, type Budget, type Category, type Transaction } from "../types.js";
 
 export interface DigestCategory {
@@ -39,6 +39,7 @@ export interface DigestInput {
   budgets: Budget[];
   /** YYYY-MM to summarize (typically the last full month). */
   month: string;
+  recurringOverrides?: RecurringOverride[];
 }
 
 const prevMonthOf = (month: string): string => {
@@ -88,7 +89,7 @@ export function buildMonthlyDigest(input: DigestInput): MonthlyDigest {
     budgetStats = { count: budgets.length, overCount, totalLimit, totalSpent };
   }
 
-  const recurring = detectRecurring({ transactions, categories });
+  const recurring = detectRecurring({ transactions, categories, overrides: input.recurringOverrides });
 
   return {
     month,

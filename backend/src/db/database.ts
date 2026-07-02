@@ -214,6 +214,19 @@ CREATE TABLE IF NOT EXISTS family_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_family_requests_owner ON family_requests(ownerId);
 
+-- User overrides for recurring detection: force a merchant in ("always")
+-- or out ("never") of recurring/bills/forecast.
+CREATE TABLE IF NOT EXISTS recurring_overrides (
+  userId    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key       TEXT NOT NULL,
+  mode      TEXT NOT NULL,
+  merchant  TEXT,
+  cadence   TEXT,
+  amount    INTEGER,
+  createdAt TEXT NOT NULL,
+  PRIMARY KEY (userId, key)
+);
+
 -- Opt-in monthly email digest (sent via the central API from the bot Gmail).
 CREATE TABLE IF NOT EXISTS email_prefs (
   userId        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -255,6 +268,8 @@ export function initSchema(): void {
   // Entitlement-token columns for the account link (added after first ship).
   ensureColumn("central_link", "centralUserId", "centralUserId TEXT");
   ensureColumn("central_link", "entToken", "entToken TEXT");
+  // Budget sub-categories (nullable parent).
+  ensureColumn("categories", "parentId", "parentId TEXT");
 }
 
 initSchema();

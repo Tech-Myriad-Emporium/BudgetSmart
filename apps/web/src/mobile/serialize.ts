@@ -43,7 +43,7 @@ export const serializeAccount = (a: AccountRow, balance: number): Account => ({
 });
 
 export const serializeCategory = (c: CategoryRow): Category => ({
-  id: c.id, name: c.name, kind: c.kind as CategoryKind, icon: c.icon, color: c.color,
+  id: c.id, name: c.name, kind: c.kind as CategoryKind, parentId: (c as { parentId?: string | null }).parentId ?? null, icon: c.icon, color: c.color,
   rollover: c.rollover as RolloverMode, hidden: intToBool(c.hidden), createdAt: c.createdAt,
 });
 

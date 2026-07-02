@@ -5,6 +5,7 @@ import { buildMonthlyDigest, resolveEntitlements } from "@budgetsmart/shared";
 import { env } from "../../env.js";
 import { accounts, budgets, categories, centralLink, emailPrefs, transactions, users } from "../../db/repo.js";
 import { computeBalancesForUser } from "../../lib/balances.js";
+import { overridesFor } from "../recurring/recurring.routes.js";
 import { effectiveTier } from "../../lib/entitlement.js";
 import { serializeAccount, serializeBudget, serializeCategory, serializeTransaction } from "../../lib/serialize.js";
 
@@ -32,6 +33,7 @@ export async function buildAndSendDigest(userId: string, month: string): Promise
     accounts: accounts.listByUser(userId, { activeOnly: true }).map((a) => serializeAccount(a, balances.get(a.id) ?? a.openingBalance)),
     budgets: budgets.listByUserMonth(userId, month).map(serializeBudget),
     month,
+    recurringOverrides: overridesFor(userId),
   });
 
   try {

@@ -74,12 +74,26 @@ function predictNext(lastIso: string, cadence: Cadence): string {
   }
 }
 
+/** User override: force a merchant to be treated as recurring, or never. */
+export interface RecurringOverride {
+  /** Normalized merchant key (see normalizeMerchant). */
+  key: string;
+  mode: "always" | "never";
+  /** For "always": display name when there's little/no history. */
+  merchant?: string;
+  cadence?: Cadence;
+  /** Typical amount in cents (falls back to the median of history). */
+  amount?: number;
+}
+
 export interface DetectRecurringInput {
   transactions: Transaction[];
   categories: Category[];
   now?: Date;
   /** Look-ahead window for upcoming charges, in days. */
   upcomingDays?: number;
+  /** User customizations: force-include or exclude merchants. */
+  overrides?: RecurringOverride[];
 }
 
 export function detectRecurring(input: DetectRecurringInput): RecurringSummary {
@@ -87,17 +101,48 @@ export function detectRecurring(input: DetectRecurringInput): RecurringSummary {
   const now = input.now ?? new Date();
   const upcomingDays = input.upcomingDays ?? 35;
   const byId = new Map(categories.map((c) => [c.id, c]));
+  const never = new Set((input.overrides ?? []).filter((o) => o.mode === "never").map((o) => o.key));
+  const always = new Map((input.overrides ?? []).filter((o) => o.mode === "always").map((o) => [o.key, o]));
 
   // group qualifying expenses by normalized merchant
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
     if (t.type !== "expense" || t.excluded || !t.merchant.trim()) continue;
     const key = normalizeMerchant(t.merchant);
-    if (!key) continue;
+    if (!key || never.has(key)) continue;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(t);
   }
 
   const items: RecurringItem[] = [];
+
+  // force-included merchants: build items even when detection wouldn't
+  for (const [key, o] of always) {
+    const txns = (groups.get(key) ?? []).sort((a, b) => (a.date < b.date ? -1 : 1));
+    groups.delete(key); // don't double-process below
+    const cadence = o.cadence ?? "monthly";
+    const amounts = txns.map((t) => t.amount);
+    const typicalAmount = o.amount ?? (amounts.length ? Math.round(median(amounts)) : 0);
+    if (typicalAmount <= 0) continue;
+    const last = txns[txns.length - 1];
+    const lastIso = last?.date ?? toIso(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const cat = last?.categoryId ? byId.get(last.categoryId) : undefined;
+    items.push({
+      key,
+      merchant: last?.merchant ?? o.merchant ?? key,
+      categoryId: last?.categoryId ?? null,
+      categoryName: cat?.name ?? "Uncategorized",
+      icon: cat?.icon ?? "📌",
+      color: cat?.color ?? "#00FF41",
+      cadence,
+      typicalAmount,
+      monthlyCost: cadenceToMonthly(cadence, typicalAmount),
+      occurrences: txns.length,
+      lastDate: lastIso,
+      nextDate: predictNext(lastIso, cadence),
+      confidence: 1,
+      isSubscription: true,
+    });
+  }
 
   for (const [key, txns] of groups) {
     if (txns.length < 2) continue;

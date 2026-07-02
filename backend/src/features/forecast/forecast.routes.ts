@@ -5,6 +5,7 @@ import { computeBalancesForUser } from "../../lib/balances.js";
 import { asyncHandler } from "../../lib/http.js";
 import { serializeAccount, serializeCategory, serializeTransaction } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
+import { overridesFor } from "../recurring/recurring.routes.js";
 
 export const forecastRouter = Router();
 forecastRouter.use(requireAuth);
@@ -21,6 +22,7 @@ forecastRouter.get(
       accounts: accounts
         .listByUser(userId, { activeOnly: true })
         .map((a) => serializeAccount(a, balances.get(a.id) ?? a.openingBalance)),
+      recurringOverrides: overridesFor(userId),
     });
     res.json({ summary });
   }),

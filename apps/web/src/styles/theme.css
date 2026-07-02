@@ -795,3 +795,8 @@ textarea.input:focus {
 .cal-event-label { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .cal-event-amt { font-family: var(--font-mono); }
 @media (max-width: 720px) { .cal-cell { min-height: 64px; } .cal-event-label { display: none; } }
+
+/* nav reorder controls */
+.nav-move { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--fg-faint); font-size: 8px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+.nav-move:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.nav-move:disabled { opacity: 0.3; cursor: default; }

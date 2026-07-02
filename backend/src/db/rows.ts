@@ -67,6 +67,16 @@ export interface FamilyRequestRow {
   resolvedAt: string | null;
 }
 
+export interface RecurringOverrideRow {
+  userId: string;
+  key: string;
+  mode: string;
+  merchant: string | null;
+  cadence: string | null;
+  amount: number | null;
+  createdAt: string;
+}
+
 export interface AccountRow {
   id: string;
   userId: string;
@@ -83,6 +93,7 @@ export interface CategoryRow {
   userId: string;
   name: string;
   kind: string;
+  parentId: string | null;
   icon: string;
   color: string;
   rollover: string;

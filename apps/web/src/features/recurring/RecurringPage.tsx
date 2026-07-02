@@ -1,11 +1,52 @@
-import { CADENCE_LABELS, formatMoney, type RecurringItem, type UpcomingCharge } from "@budgetsmart/shared";
+import { CADENCE_LABELS, CADENCES, formatMoney, parseMoney, type Cadence, type RecurringItem, type UpcomingCharge } from "@budgetsmart/shared";
+import { useState } from "react";
 import { EmptyState, Money, Spinner } from "../../components/ui";
-import { useRecurring } from "../../lib/hooks";
+import { useRecurring, useRecurringOverrides } from "../../lib/hooks";
 import { formatDateShort } from "../../lib/format";
+
+/** Manually mark a merchant as recurring (for charges detection can't see yet). */
+function AddRecurringForm() {
+  const { set } = useRecurringOverrides();
+  const [merchant, setMerchant] = useState("");
+  const [amount, setAmount] = useState("");
+  const [cadence, setCadence] = useState<Cadence>("monthly");
+
+  function add() {
+    const cents = parseMoney(amount);
+    if (!merchant.trim() || !cents || cents <= 0) return;
+    set.mutate(
+      { merchant: merchant.trim(), mode: "always", cadence, amount: cents },
+      { onSuccess: () => { setMerchant(""); setAmount(""); } },
+    );
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">Didn't find one? Add it yourself</span>
+      <div className="row gap-sm wrap" style={{ marginTop: 12 }}>
+        <input className="input btn-sm" style={{ flex: 1, minWidth: 150 }} placeholder="Merchant (e.g. Gym membership)" value={merchant}
+          onChange={(e) => setMerchant(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <div className="input-prefix" style={{ width: 100 }}>
+          <span>$</span>
+          <input className="input mono btn-sm" style={{ padding: "6px 8px 6px 22px", width: "100%" }} inputMode="decimal" placeholder="9.99" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <select className="select btn-sm" style={{ width: 120 }} value={cadence} onChange={(e) => setCadence(e.target.value as Cadence)}>
+          {CADENCES.map((c) => <option key={c} value={c}>{CADENCE_LABELS[c]}</option>)}
+        </select>
+        <button className="btn btn-primary btn-sm" onClick={add} disabled={set.isPending || !merchant.trim()}>+ Track it</button>
+      </div>
+      <div className="faint text-xs" style={{ marginTop: 8 }}>
+        Shows up in Recurring, the Calendar and your Forecast — even before there's transaction history.
+      </div>
+    </div>
+  );
+}
 
 export function RecurringPage() {
   const recurringQ = useRecurring();
-  const data = recurringQ.data;
+  const { set, remove } = useRecurringOverrides();
+  const data = recurringQ.data?.summary;
+  const ignored = (recurringQ.data?.overrides ?? []).filter((o) => o.mode === "never");
 
   return (
     <div className="page">
@@ -57,21 +98,35 @@ export function RecurringPage() {
             <div className="divider" />
             <div className="ledger" style={{ padding: "4px 12px 12px" }}>
               {data.items.map((it) => (
-                <RecurringRow key={it.key} item={it} />
+                <RecurringRow key={it.key} item={it} onIgnore={() => set.mutate({ merchant: it.merchant, mode: "never" })} />
               ))}
             </div>
+            {ignored.length > 0 && (
+              <div style={{ padding: "0 20px 16px" }}>
+                <span className="faint text-xs">Ignored: </span>
+                {ignored.map((o) => (
+                  <button key={o.key} className="chip" style={{ cursor: "pointer", marginRight: 6 }} title="Click to detect this merchant again"
+                    onClick={() => remove.mutate(o.key)}>
+                    {o.merchant ?? o.key} ↺
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* upcoming */}
-          <div className="card">
-            <span className="card-title">Upcoming charges</span>
-            <div className="col" style={{ marginTop: 12 }}>
-              {data.upcoming.length === 0 ? (
-                <span className="faint text-sm">Nothing due in the next 45 days.</span>
-              ) : (
-                data.upcoming.map((u) => <UpcomingRow key={`${u.key}-${u.date}`} charge={u} />)
-              )}
+          <div className="col gap-md">
+            <div className="card">
+              <span className="card-title">Upcoming charges</span>
+              <div className="col" style={{ marginTop: 12 }}>
+                {data.upcoming.length === 0 ? (
+                  <span className="faint text-sm">Nothing due in the next 45 days.</span>
+                ) : (
+                  data.upcoming.map((u) => <UpcomingRow key={`${u.key}-${u.date}`} charge={u} />)
+                )}
+              </div>
             </div>
+            <AddRecurringForm />
           </div>
         </div>
       )}
@@ -79,9 +134,9 @@ export function RecurringPage() {
   );
 }
 
-function RecurringRow({ item }: { item: RecurringItem }) {
+function RecurringRow({ item, onIgnore }: { item: RecurringItem; onIgnore: () => void }) {
   return (
-    <div className="ledger-row" style={{ gridTemplateColumns: "34px 1fr auto" }}>
+    <div className="ledger-row" style={{ gridTemplateColumns: "34px 1fr auto auto" }}>
       <span className="cat-icon" style={{ borderColor: item.color }}>
         {item.icon}
       </span>
@@ -99,6 +154,7 @@ function RecurringRow({ item }: { item: RecurringItem }) {
         <Money cents={item.typicalAmount} className="text-sm" />
         <span className="faint text-xs">{formatMoney(item.monthlyCost)}/mo</span>
       </div>
+      <button className="btn btn-ghost btn-sm" onClick={onIgnore} title="Not recurring — stop tracking this merchant">✕</button>
     </div>
   );
 }
