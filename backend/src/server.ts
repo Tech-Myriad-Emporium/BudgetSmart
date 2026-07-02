@@ -13,6 +13,7 @@ import { debtRouter } from "./features/debt/debt.routes.js";
 import { familyRouter } from "./features/family/family.routes.js";
 import { forecastRouter } from "./features/forecast/forecast.routes.js";
 import { gamificationRouter } from "./features/gamification/gamification.routes.js";
+import { importRouter } from "./features/import/import.routes.js";
 import { insightsRouter } from "./features/insights/insights.routes.js";
 import { intelligenceRouter } from "./features/intelligence/intelligence.routes.js";
 import { goalsRouter } from "./features/goals/goals.routes.js";
@@ -30,7 +31,8 @@ export function createServer() {
   const app = express();
 
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
-  app.use(express.json({ limit: "1mb" }));
+  // 8mb so a full year's bank statement file fits through /api/import.
+  app.use(express.json({ limit: "8mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "budgetsmart-api", time: new Date().toISOString() });
@@ -53,6 +55,7 @@ export function createServer() {
   app.use("/api/recurring", requireAuth, requireFeature("recurring"), recurringRouter);
   app.use("/api/reports", requireAuth, requireFeature("reports"), reportsRouter);
   app.use("/api/insights", requireAuth, requireFeature("insights"), insightsRouter);
+  app.use("/api/import", requireAuth, requireFeature("import"), importRouter);
   app.use("/api/forecast", requireAuth, requireFeature("forecast"), forecastRouter);
   app.use("/api/intelligence", requireAuth, requireFeature("intelligence"), intelligenceRouter);
   app.use("/api/investments", requireAuth, requireFeature("investments"), investmentsRouter);

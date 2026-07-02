@@ -217,6 +217,7 @@ export const FEATURES: Feature[] = [
   { key: "recurring", label: "Recurring & subscription detection", description: "Auto-detect repeating charges", level: 1 },
   { key: "reports", label: "Reports & trends", description: "Breakdowns, cashflow, heatmap", level: 1 },
   { key: "insights", label: "Smart cleanup & alerts", description: "Dedupe, refunds, auto-budget, auto-tag, overspend alerts", level: 1 },
+  { key: "import", label: "Bank statement import", description: "CSV/OFX/QFX/QIF import with auto-tag & dedupe", level: 1 },
   // Tier 2 (level 2) — wealth & AI
   { key: "investments", label: "Investments", description: "Portfolio, allocation & growth", level: 2 },
   { key: "networth", label: "Net worth", description: "Unified assets vs. liabilities + history", level: 2 },

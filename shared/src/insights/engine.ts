@@ -99,11 +99,53 @@ export interface InsightsInput {
   now?: Date;
 }
 
+/* ---- reusable auto-category model (also used by statement import) ---- */
+export type MerchantModel = Map<string, Map<string, number>>;
+
+/** Learn merchant → category frequencies from the user's categorized history. */
+export function learnMerchantCategories(transactions: Transaction[]): MerchantModel {
+  const model: MerchantModel = new Map();
+  for (const t of transactions) {
+    if (!t.categoryId || t.type !== "expense" || t.excluded) continue;
+    const key = normalizeMerchant(t.merchant);
+    if (!key) continue;
+    const counts = model.get(key) ?? model.set(key, new Map()).get(key)!;
+    counts.set(t.categoryId, (counts.get(t.categoryId) ?? 0) + 1);
+  }
+  return model;
+}
+
+export interface CategorySuggestion {
+  category: Category;
+  source: "history" | "keyword";
+  confidence: number;
+}
+
+/** Suggest a category for a merchant: the user's own history wins, keywords fall back. */
+export function suggestCategory(merchant: string, model: MerchantModel, categories: Category[]): CategorySuggestion | null {
+  if (!merchant.trim()) return null;
+  const key = normalizeMerchant(merchant);
+  const counts = key ? model.get(key) : undefined;
+  if (counts && counts.size > 0) {
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    if (best[1] >= 2 || total === best[1]) {
+      const category = categories.find((c) => c.id === best[0]);
+      if (category) return { category, source: "history", confidence: Math.min(0.95, 0.6 + best[1] * 0.1) };
+    }
+  }
+  const rule = KEYWORD_RULES.find((r) => r.pattern.test(merchant));
+  if (rule) {
+    const category = categories.find((c) => c.name.toLowerCase() === rule.category.toLowerCase());
+    if (category) return { category, source: "keyword", confidence: 0.7 };
+  }
+  return null;
+}
+
 export function buildInsights(input: InsightsInput): InsightsSummary {
   const { transactions, categories, budgets } = input;
   const now = input.now ?? new Date();
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const catByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
   const active = transactions.filter((t) => !t.excluded);
 
   /* ---- duplicates: same merchant + amount within a day ---- */
@@ -170,53 +212,23 @@ export function buildInsights(input: InsightsInput): InsightsSummary {
   }
 
   /* ---- auto-tagging: learn merchant→category from history, else keywords ---- */
-  const learned = new Map<string, Map<string, number>>();
-  for (const t of active) {
-    if (!t.categoryId || t.type !== "expense") continue;
-    const key = normalizeMerchant(t.merchant);
-    if (!key) continue;
-    const counts = learned.get(key) ?? learned.set(key, new Map()).get(key)!;
-    counts.set(t.categoryId, (counts.get(t.categoryId) ?? 0) + 1);
-  }
+  const learned = learnMerchantCategories(active);
   const autoTags: AutoTagSuggestion[] = [];
   for (const t of active) {
     if (t.categoryId || t.type !== "expense" || !t.merchant.trim()) continue;
-    const key = normalizeMerchant(t.merchant);
-    let categoryId: string | null = null;
-    let source: "history" | "keyword" = "history";
-    let confidence = 0;
-    const counts = key ? learned.get(key) : undefined;
-    if (counts) {
-      const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
-      const total = [...counts.values()].reduce((a, b) => a + b, 0);
-      if (best[1] >= 2 || total === best[1]) {
-        categoryId = best[0];
-        confidence = Math.min(0.95, 0.6 + best[1] * 0.1);
-      }
-    }
-    if (!categoryId) {
-      const rule = KEYWORD_RULES.find((r) => r.pattern.test(t.merchant));
-      const cat = rule ? catByName.get(rule.category.toLowerCase()) : undefined;
-      if (cat) {
-        categoryId = cat.id;
-        source = "keyword";
-        confidence = 0.7;
-      }
-    }
-    if (!categoryId) continue;
-    const cat = catById.get(categoryId);
-    if (!cat) continue;
+    const s = suggestCategory(t.merchant, learned, categories);
+    if (!s) continue;
     autoTags.push({
       transactionId: t.id,
       merchant: t.merchant,
       date: t.date,
       amount: t.amount,
-      categoryId,
-      categoryName: cat.name,
-      icon: cat.icon,
-      color: cat.color,
-      source,
-      confidence,
+      categoryId: s.category.id,
+      categoryName: s.category.name,
+      icon: s.category.icon,
+      color: s.category.color,
+      source: s.source,
+      confidence: s.confidence,
     });
   }
   autoTags.sort((a, b) => (a.date < b.date ? 1 : -1));

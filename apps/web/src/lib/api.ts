@@ -10,8 +10,10 @@ import type {
   Entitlements,
   FamilyOverview,
   Feature,
+  CsvMapping,
   ForecastSummary,
   GamificationState,
+  ImportAnalysis,
   Goal,
   GoalsSummary,
   GrowthProjection,
@@ -244,6 +246,12 @@ export const api = {
 
   // recurring
   recurring: () => request<{ summary: RecurringSummary }>("/recurring"),
+
+  // statement import
+  importPreview: (content: string, mapping?: CsvMapping) =>
+    request<{ analysis: ImportAnalysis }>("/import/preview", { method: "POST", body: JSON.stringify({ content, mapping }) }),
+  importCommit: (accountId: string, rows: Array<{ date: string; amount: number; type: TransactionType; merchant: string; note: string | null; categoryId: string | null }>) =>
+    request<{ created: number }>("/import/commit", { method: "POST", body: JSON.stringify({ accountId, rows }) }),
 
   // tier intelligence
   insights: () => request<{ summary: InsightsSummary }>("/insights"),

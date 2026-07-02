@@ -8,6 +8,7 @@ import { useEntitlements } from "../lib/hooks";
 const NAV: { to: string; label: string; icon: string; end?: boolean; feature?: string }[] = [
   { to: "/", label: "Dashboard", icon: "▦", end: true },
   { to: "/transactions", label: "Transactions", icon: "⇄" },
+  { to: "/import", label: "Import", icon: "⤒", feature: "import" },
   { to: "/budgets", label: "Budgets", icon: "◫" },
   { to: "/recurring", label: "Recurring", icon: "⟳", feature: "recurring" },
   { to: "/insights", label: "Insights", icon: "✦", feature: "insights" },
@@ -26,6 +27,7 @@ const NAV: { to: string; label: string; icon: string; end?: boolean; feature?: s
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Your money at a glance" },
   "/transactions": { title: "Transactions", subtitle: "Every dollar, tracked" },
+  "/import": { title: "Import", subtitle: "Bring in bank statements — auto-tagged, deduped" },
   "/budgets": { title: "Budgets", subtitle: "Plan and pace your spending" },
   "/recurring": { title: "Recurring", subtitle: "Subscriptions and repeating bills" },
   "/insights": { title: "Insights", subtitle: "Cleanup, auto-tagging, and overspend alerts" },
