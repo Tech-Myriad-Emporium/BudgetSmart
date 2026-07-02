@@ -24,9 +24,11 @@ const WEB_ACCOUNT_URL = "https://budgetsmarttme.com/account";
 
 const GROUP_LABEL: Record<string, string> = {
   base: "Own it once",
-  individual: "Individual — monthly",
+  individual: "Individual",
   family: "Family — up to 5 people",
 };
+
+type BillingInterval = "month" | "year";
 
 /** For individual tiers, the plan each one builds on (shown as "Everything in …"). */
 const BUILDS_ON: Record<string, string> = {
@@ -38,6 +40,7 @@ const BUILDS_ON: Record<string, string> = {
 export function SubscriptionPage() {
   const subQ = useSubscription();
   const plansQ = usePlans();
+  const [billing, setBilling] = useState<BillingInterval>("year");
 
   const current = subQ.data;
   const plans = plansQ.data;
@@ -62,11 +65,25 @@ export function SubscriptionPage() {
             <span className="faint text-xs">
               {current.entitlements.tier.priceCents === 0
                 ? "Free"
-                : `${formatMoney(current.entitlements.tier.priceCents)}${current.entitlements.tier.interval === "once" ? " one-time" : "/mo"}`}{" "}
+                : `${formatMoney(current.entitlements.tier.priceCents)}/mo${
+                    current.entitlements.tier.annualPriceCents
+                      ? ` or ${formatMoney(current.entitlements.tier.annualPriceCents)}/yr`
+                      : ""
+                  }`}{" "}
               · up to {current.entitlements.memberLimit} member{current.entitlements.memberLimit === 1 ? "" : "s"}
             </span>
           </div>
         </div>
+      </div>
+
+      {/* billing interval toggle */}
+      <div className="row gap-sm" style={{ justifyContent: "center" }}>
+        <button className={`btn btn-sm ${billing === "month" ? "btn-primary" : ""}`} onClick={() => setBilling("month")}>
+          Monthly
+        </button>
+        <button className={`btn btn-sm ${billing === "year" ? "btn-primary" : ""}`} onClick={() => setBilling("year")}>
+          Yearly · save ~25%
+        </button>
       </div>
 
       {/* pricing grid by group — billing happens on the web */}
@@ -77,7 +94,7 @@ export function SubscriptionPage() {
             {plans.tiers
               .filter((t) => t.group === group)
               .map((t) => (
-                <TierCard key={t.id} tier={t} current={t.id === current.tierId} />
+                <TierCard key={t.id} tier={t} current={t.id === current.tierId} billing={billing} />
               ))}
           </div>
         </div>
@@ -167,8 +184,11 @@ function AccountCard() {
   );
 }
 
-function TierCard({ tier, current }: { tier: Tier; current: boolean }) {
+function TierCard({ tier, current, billing }: { tier: Tier; current: boolean; billing: BillingInterval }) {
   const buildsOn = BUILDS_ON[tier.id];
+  const yearly = billing === "year" && tier.annualPriceCents !== undefined && tier.priceCents > 0;
+  const price = yearly ? tier.annualPriceCents! : tier.priceCents;
+  const cadence = tier.priceCents === 0 ? "" : tier.interval === "once" ? "one-time" : yearly ? "/yr" : "/mo";
   return (
     <div
       className="card"
@@ -183,9 +203,14 @@ function TierCard({ tier, current }: { tier: Tier; current: boolean }) {
       {tier.highlight && !current && <span className="badge accent text-xs" style={{ position: "absolute", top: 14, right: 14 }}>Popular</span>}
       <span className="card-title">{tier.name}</span>
       <div className="row" style={{ alignItems: "baseline", gap: 6, marginTop: 8 }}>
-        <span className="stat stat-xl">{tier.priceCents === 0 ? "Free" : formatMoney(tier.priceCents)}</span>
-        {tier.priceCents > 0 && <span className="faint text-xs">{tier.interval === "once" ? "one-time" : "/mo"}</span>}
+        <span className="stat stat-xl">{tier.priceCents === 0 ? "Free" : formatMoney(price)}</span>
+        {tier.priceCents > 0 && <span className="faint text-xs">{cadence}</span>}
       </div>
+      {yearly && (
+        <span className="faint text-xs" style={{ marginTop: 2 }}>
+          ≈ {formatMoney(Math.round(tier.annualPriceCents! / 12))}/mo · vs {formatMoney(tier.priceCents * 12)} monthly
+        </span>
+      )}
       <span className="faint text-xs" style={{ display: "block", marginTop: 4, minHeight: 28 }}>{tier.tagline}</span>
       <div className="badge" style={{ marginTop: 8 }}>up to {tier.memberLimit} member{tier.memberLimit === 1 ? "" : "s"}</div>
 
