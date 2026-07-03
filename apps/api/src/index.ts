@@ -153,10 +153,10 @@ app.get("/health", (c) => c.json({ status: "ok" }));
  * Bump LATEST on each release (keep in sync with shared APP_VERSION).
  * ------------------------------------------------------------------ */
 const LATEST = {
-  version: "1.2.1",
+  version: "1.2.2",
   channel: "beta",
-  label: "Beta v1.2.1",
-  notes: "Shared family goals, weekly reports, financial calendar, custom tabs & sub-categories, Pulse health score, statement import, and loading-screen tips.",
+  label: "Beta v1.2.2",
+  notes: "New look, live market sync, guided onboarding, 7-day free trial, audit trail — plus shared goals, weekly reports and the financial calendar.",
   windows: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-Setup.exe",
   linux: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage",
   android: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk",
