@@ -123,7 +123,7 @@ function Hero() {
             <div className="l">{t("hero.statModules")}</div>
           </div>
           <div className="hero-stat">
-            <div className="n mono">4</div>
+            <div className="n mono">5</div>
             <div className="l">{t("hero.statPlatforms")}</div>
           </div>
           <div className="hero-stat">
@@ -418,6 +418,8 @@ const WINDOWS_INSTALLER = "https://budgetsmart-api.budgetsmart.workers.dev/downl
 
 const LINUX_APPIMAGE = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage";
 const ANDROID_APK = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk";
+const MAC_ARM_DMG = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-arm64.dmg";
+const MAC_X64_DMG = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-x64.dmg";
 
 const APT_INSTALL = `curl -fsSL https://budgetsmart-api.budgetsmart.workers.dev/apt/budgetsmart.gpg \\
   | sudo tee /usr/share/keyrings/budgetsmart.gpg > /dev/null
@@ -429,11 +431,12 @@ sudo apt update && sudo apt install budgetsmart`;
 function Downloads() {
   const { t } = useI18n();
   const platforms = [
-    { os: "iOS", icon: "", meta: "iPhone & iPad", file: null },
-    { os: "Android", icon: "🤖", meta: "Android 7+ · APK", file: ANDROID_APK },
-    { os: "macOS", icon: "", meta: "Apple silicon & Intel", file: null },
-    { os: "Windows", icon: "⊞", meta: "Windows 10 & 11 · ~110 MB", file: WINDOWS_INSTALLER },
+    { os: "Windows", icon: "⊞", meta: "Windows 10 & 11", file: WINDOWS_INSTALLER },
+    { os: "macOS", icon: "", meta: "Apple silicon · M1+", file: MAC_ARM_DMG },
+    { os: "macOS", icon: "", meta: "Intel Macs", file: MAC_X64_DMG },
     { os: "Linux", icon: "🐧", meta: "AppImage · any distro", file: LINUX_APPIMAGE },
+    { os: "Android", icon: "🤖", meta: "Android 7+ · APK", file: ANDROID_APK },
+    { os: "iOS", icon: "", meta: "iPhone & iPad", file: null },
   ];
   return (
     <section id="download">
@@ -444,7 +447,7 @@ function Downloads() {
         <p className="section-sub" style={{ fontSize: 13, marginTop: 2 }}><span className="accent mono">Latest: Beta v1.2.1</span></p>
         <div className="dl-grid">
           {platforms.map((p) => (
-            <div className="dl" key={p.os}>
+            <div className="dl" key={p.os + p.meta}>
               <div className="platform">{p.icon}</div>
               <div className="os">{p.os}</div>
               <div className="meta">{p.meta}</div>

@@ -44,3 +44,10 @@ jobs:
           name: budgetsmart-android
           path: apps/web/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Publish APK to the download link
+        env:
+          UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
+        run: |
+          f=$(ls apps/web/android/app/build/outputs/apk/debug/*.apk | head -1)
+          node scripts/r2-upload.mjs "$f" "BudgetSmart.apk"

@@ -153,11 +153,13 @@ app.get("/health", (c) => c.json({ status: "ok" }));
  * Bump LATEST on each release (keep in sync with shared APP_VERSION).
  * ------------------------------------------------------------------ */
 const LATEST = {
-  version: "1.2.2",
+  version: "1.2.3",
   channel: "beta",
-  label: "Beta v1.2.2",
-  notes: "New look, live market sync, guided onboarding, 7-day free trial, audit trail — plus shared goals, weekly reports and the financial calendar.",
+  label: "Beta v1.2.3",
+  notes: "macOS support, investment backtesting on real market history, and on-device receipt scanning (photo → transaction).",
   windows: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-Setup.exe",
+  mac: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-arm64.dmg",
+  macIntel: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-x64.dmg",
   linux: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage",
   android: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk",
 };

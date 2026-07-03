@@ -1,4 +1,4 @@
-name: Build Linux
+name: Build macOS
 
 on:
   workflow_dispatch:
@@ -7,8 +7,15 @@ on:
     tags: ["v*"]
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  mac:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: x64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,27 +38,27 @@ jobs:
           npm --prefix backend run build
           npm --prefix apps/web run build
 
-      - name: Stage app resources (bundles the Linux Node runtime)
+      - name: Stage app resources (bundles the macOS Node runtime)
         run: |
           cd apps/desktop
           node stage.mjs
           chmod +x app-resources/node
 
-      - name: Build Linux packages (AppImage + deb)
-        run: cd apps/desktop && npx electron-builder --linux --config electron-builder.yml
+      - name: Build macOS dmg (unsigned beta)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: cd apps/desktop && npx electron-builder --mac --${{ matrix.arch }} --config electron-builder.yml
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: budgetsmart-linux
-          path: |
-            apps/desktop/dist-eb/*.AppImage
-            apps/desktop/dist-eb/*.deb
+          name: budgetsmart-macos-${{ matrix.arch }}
+          path: apps/desktop/dist-eb/*.dmg
           if-no-files-found: error
 
-      - name: Publish AppImage to the download link
+      - name: Publish dmg to the download link
         env:
           UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
         run: |
-          f=$(ls apps/desktop/dist-eb/*.AppImage | head -1)
-          node scripts/r2-upload.mjs "$f" "BudgetSmart.AppImage"
+          f=$(ls apps/desktop/dist-eb/*.dmg | head -1)
+          node scripts/r2-upload.mjs "$f" "BudgetSmart-${{ matrix.arch }}.dmg"

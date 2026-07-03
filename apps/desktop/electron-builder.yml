@@ -10,6 +10,9 @@ directories:
 files:
   - electron.js
   - preload.js
+  - splash.html
+  - tips-browser.js
+  - BudgetSmart.gif
   - icon.png
   - package.json
 extraResources:
@@ -23,3 +26,12 @@ linux:
   icon: build/icon.png
   maintainer: Tech Myriad Emporium <jaydenrobinson727@gmail.com>
   synopsis: All-in-one personal finance app
+mac:
+  target:
+    - dmg
+  category: public.app-category.finance
+  icon: build/icon.png
+  # unsigned beta builds — users right-click → Open the first time
+  identity: null
+dmg:
+  title: BudgetSmart

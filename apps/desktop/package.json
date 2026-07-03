@@ -1,7 +1,7 @@
 {
   "name": "budgetsmart",
   "productName": "BudgetSmart",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "description": "BudgetSmart desktop app",
   "main": "electron.js",
