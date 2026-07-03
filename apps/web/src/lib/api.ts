@@ -89,7 +89,7 @@ const qs = (params: Record<string, unknown>): string => {
 
 export interface AuthPayload {
   token: string;
-  user: { id: string; email: string; name: string; currency: string; tier?: string; createdAt: string };
+  user: { id: string; email: string; name: string; currency: string; tier?: string; onboarded?: boolean; createdAt: string };
 }
 
 export interface DashboardData {
@@ -142,6 +142,7 @@ export const api = {
   register: (input: { email: string; password: string; name: string }) =>
     request<AuthPayload>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
   me: () => request<{ user: AuthPayload["user"] }>("/auth/me"),
+  completeOnboarding: () => request<{ user: AuthPayload["user"] }>("/auth/onboarded", { method: "POST" }),
 
   // dashboard
   dashboard: (month?: string) => request<DashboardData>(`/dashboard${qs({ month })}`),
@@ -201,6 +202,7 @@ export const api = {
 
   // investments
   investments: () => request<{ portfolio: Portfolio }>("/investments"),
+  refreshPrices: () => request<{ updated: number; skipped: number }>("/investments/refresh-prices", { method: "POST" }),
   investmentProjection: (monthly: number, returnPct: number, years: number) =>
     request<{ projection: GrowthProjection }>(`/investments/projection${qs({ monthly, returnPct, years })}`),
   createHolding: (input: HoldingInput) =>

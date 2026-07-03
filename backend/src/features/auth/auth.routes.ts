@@ -65,3 +65,14 @@ authRouter.get(
     res.json({ user: serializeUser(user) });
   }),
 );
+
+/** POST /auth/onboarded — mark the in-app tour as completed. */
+authRouter.post(
+  "/onboarded",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    users.markOnboarded(userIdOf(req));
+    const user = users.findById(userIdOf(req))!;
+    res.json({ user: serializeUser(user) });
+  }),
+);

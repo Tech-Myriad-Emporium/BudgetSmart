@@ -36,6 +36,8 @@ export interface User {
   email: string;
   name: string;
   currency: string; // ISO 4217, e.g. "USD"
+  /** Completed the in-app onboarding tour. */
+  onboarded: boolean;
   createdAt: string; // ISO timestamp
 }
 

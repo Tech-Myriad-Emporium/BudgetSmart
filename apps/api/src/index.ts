@@ -6,6 +6,7 @@ import { sendVerificationEmail, sendFamilyInviteEmail, sendMonthlyDigestEmail, t
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
 import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
+import { CORE_SYMBOLS, getQuotes, refreshMarket, toProviderSymbol } from "./market.js";
 import type { AccountView, Env, UserRow } from "./types.js";
 
 type Vars = { userId: string };
@@ -36,6 +37,7 @@ function view(u: UserRow, env: Env): AccountView {
     theme: u.theme ?? "dark",
     location: u.location ?? null,
     twoFactorEnabled: u.totp_enabled === 1,
+    trialEndsAt: u.trial_ends_at ?? null,
   };
 }
 
@@ -54,15 +56,25 @@ async function familyTierFor(env: Env, userId: string): Promise<string | null> {
   return null;
 }
 
-/** Effective tier = inherited family tier if any, otherwise the user's own. */
+/** Free trial: Tier 3 for 7 days, no card. Active while the clock runs. */
+const TRIAL_DAYS = 7;
+const TRIAL_TIER = "ind_t3";
+function trialActive(u: UserRow): boolean {
+  return u.tier === "base" && !!u.trial_ends_at && u.trial_ends_at > unix();
+}
+
+/** Effective tier = inherited family tier if any, else trial, else their own. */
 async function resolveTier(env: Env, u: UserRow): Promise<string> {
   if (u.tier.startsWith("fam_")) return u.tier; // owner already has it
-  return (await familyTierFor(env, u.id)) ?? u.tier;
+  const fam = await familyTierFor(env, u.id);
+  if (fam) return fam;
+  if (trialActive(u)) return TRIAL_TIER;
+  return u.tier;
 }
 
 /** Client-facing account view with the effective (possibly inherited) tier. */
 async function accountView(env: Env, u: UserRow): Promise<AccountView> {
-  return { ...view(u, env), tier: await resolveTier(env, u) };
+  return { ...view(u, env), tier: await resolveTier(env, u), trialEndsAt: u.trial_ends_at ?? null };
 }
 
 const getUserByEmail = (env: Env, email: string) =>
@@ -237,6 +249,7 @@ app.post("/auth/register", async (c) => {
     id: newId(),
     email,
     password_hash: await hashPassword(password),
+    trial_ends_at: null,
     name,
     email_verified: 0,
     tier: "base",
@@ -261,8 +274,10 @@ app.post("/auth/register", async (c) => {
     .bind(user.id, user.email, user.password_hash, user.name, 0, "base", user.created_at, user.updated_at)
     .run();
 
+  // new accounts start with a 7-day Tier 3 trial — no card needed
+  await c.env.DB.prepare("UPDATE users SET trial_ends_at = ? WHERE id = ?").bind(unix() + TRIAL_DAYS * 86_400, user.id).run();
   await createAndSendVerification(c.env, user);
-  await notify(c.env, user.id, "welcome", "Welcome to BudgetSmart 🎉", "Your account is ready. Verify your email, then choose a plan and connect the app.");
+  await notify(c.env, user.id, "welcome", "Welcome to BudgetSmart 🎉", `Your account is ready — and your ${TRIAL_DAYS}-day Tier 3 free trial is already running. Verify your email, then connect the app.`);
   return c.json({ ok: true, needsVerification: true });
 });
 
@@ -733,6 +748,36 @@ app.post("/email/monthly-summary", auth, async (c) => {
   return c.json({ ok: true, sentTo: user.email });
 });
 
+/* ------------------------------------------------------------------ *
+ * Market data (public, cached) — the site ticker & app price sync.
+ * ------------------------------------------------------------------ */
+app.get("/market/summary", async (c) => {
+  const quotes = await getQuotes(c.env, CORE_SYMBOLS.map((s) => s.symbol), false);
+  const byId = new Map(quotes.map((q) => [q.symbol, q]));
+  return c.json({
+    quotes: CORE_SYMBOLS.map((s) => ({ label: s.label, ...byId.get(s.symbol) })).filter((q) => typeof (q as { price?: number }).price === "number"),
+  });
+});
+
+app.get("/market/quote", async (c) => {
+  const raw = (c.req.query("symbols") ?? "").split(",").map((s) => toProviderSymbol(s)).filter(Boolean);
+  if (raw.length === 0) return c.json({ error: "Pass ?symbols=AAPL,VOO" }, 400);
+  return c.json({ quotes: await getQuotes(c.env, raw) });
+});
+
+/** Start the 7-day Tier 3 free trial (once per account, base tier only). */
+app.post("/trial/start", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  if (user.tier !== "base") return c.json({ error: "You already have a paid plan" }, 400);
+  if (user.trial_ends_at) return c.json({ error: "Your free trial was already used" }, 400);
+  const ends = unix() + TRIAL_DAYS * 86_400;
+  await c.env.DB.prepare("UPDATE users SET trial_ends_at = ?, updated_at = ? WHERE id = ?").bind(ends, now(), user.id).run();
+  await notify(c.env, user.id, "trial", `Your ${TRIAL_DAYS}-day Tier 3 trial started 🎉`, "Every premium feature is unlocked. Reload the app to sync.");
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ account: await accountView(c.env, updated!) });
+});
+
 /** The endpoint the desktop app polls on reload to sync its tier. */
 app.get("/entitlement", auth, async (c) => {
   const user = await getUserById(c.env, c.get("userId"));
@@ -918,4 +963,9 @@ app.get("/apt/*", async (c) => {
   return new Response(obj.body, { status: 200, headers });
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(refreshMarket(env));
+  },
+};

@@ -31,6 +31,7 @@ interface Account {
   theme: string;
   location: string | null;
   twoFactorEnabled: boolean;
+  trialEndsAt: number | null;
 }
 
 /** Apply the chosen theme to the document (persisted per account + locally). */
@@ -439,6 +440,53 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
   );
 }
 
+/** Free-trial banner: countdown while active, start button when unused. */
+function TrialCard({ account, onChange }: { account: Account; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const nowS = Math.floor(Date.now() / 1000);
+  const active = account.trialEndsAt !== null && account.trialEndsAt > nowS && account.subscriptionStatus === null && account.tier !== "base" && !account.tier.startsWith("fam_");
+  const eligible = account.tier === "base" && account.trialEndsAt === null;
+
+  async function start() {
+    setBusy(true); setErr(null);
+    const r = await api("/trial/start", { method: "POST" });
+    setBusy(false);
+    if (r.ok) onChange(); else setErr(r.data.error ?? "Couldn't start the trial.");
+  }
+
+  if (active) {
+    const days = Math.max(1, Math.ceil((account.trialEndsAt! - nowS) / 86400));
+    return (
+      <div className="acct-card" style={{ borderColor: "#00ff41" }}>
+        <div className="acct-row">
+          <div className="acct-muted">🎁 Tier 3 free trial — <span className="acct-accent">{days} day{days === 1 ? "" : "s"} left</span></div>
+        </div>
+        <p className="acct-muted" style={{ fontSize: 12, marginTop: 6 }}>
+          Every premium feature is unlocked. Pick a plan below before it ends to keep them — no card was taken for the trial.
+        </p>
+      </div>
+    );
+  }
+  if (eligible) {
+    return (
+      <div className="acct-card" style={{ borderColor: "#00ff41" }}>
+        <div className="acct-row">
+          <div>
+            <div className="acct-muted">🎁 Try Tier 3 free for 7 days</div>
+            <p className="acct-muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Every premium feature — statement import, forecasting, tax intelligence, the lot. No card required, nothing renews.
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={start} disabled={busy}>{busy ? "…" : "Start free trial"}</button>
+        </div>
+        {err && <p className="acct-msg err">{err}</p>}
+      </div>
+    );
+  }
+  return null;
+}
+
 function AccountView({ account, onChange }: { account: Account; onChange: () => void }) {
   const { t } = useI18n();
   const translateBtn = t; // the plan map below shadows `t` with the tier variable
@@ -494,6 +542,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
         </p>
       </div>
 
+      <TrialCard account={account} onChange={onChange} />
       <ProfileEditor account={account} onChange={onChange} />
       <SecuritySettings account={account} onChange={onChange} />
       <FamilyCard account={account} onChange={onChange} />

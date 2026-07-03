@@ -12,6 +12,7 @@ export interface Env {
   ENTITLEMENT_PRIVATE_KEY: string; // RSA private key (PEM) for signing entitlement tokens
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  FINNHUB_KEY?: string;
   // vars
   APP_URL: string;
   EMAIL_FROM: string;
@@ -52,6 +53,8 @@ export interface UserRow {
   totp_secret: string | null;
   totp_enabled: number;
   google_sub: string | null;
+  trial_ends_at: number | null;
+  summary_sent_at?: number | null;
 }
 
 /** Shape returned to clients (never leaks the password hash or TOTP secret). */
@@ -69,4 +72,6 @@ export interface AccountView {
   theme: string;
   location: string | null;
   twoFactorEnabled: boolean;
+  /** Unix seconds when the free trial ends (null = never started). */
+  trialEndsAt: number | null;
 }

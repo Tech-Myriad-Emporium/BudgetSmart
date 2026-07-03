@@ -759,3 +759,20 @@ section {
 .plan-more { margin: -6px 0 14px; }
 .plan-more summary { cursor: pointer; font-size: 12px; color: var(--accent); }
 .plan-more ul { margin-top: 8px; }
+
+/* logo image brand */
+.brand-img { height: 44px; width: auto; display: block; }
+
+/* ---------- live market ticker ---------- */
+.ticker {
+  display: flex; align-items: center; gap: 26px; overflow-x: auto; white-space: nowrap;
+  padding: 9px 24px; border-bottom: 1px solid var(--border); background: #050505;
+  font-size: 12.5px; scrollbar-width: none;
+}
+.ticker::-webkit-scrollbar { display: none; }
+.ticker-item { display: inline-flex; gap: 8px; align-items: baseline; color: var(--fg-muted); }
+.ticker-label { color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
+.ticker .up { color: var(--accent); }
+.ticker .down { color: #ff5c5c; }
+.ticker-live { margin-left: auto; color: var(--accent); font-size: 10px; letter-spacing: 0.14em; animation: tickpulse 2s infinite; }
+@keyframes tickpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

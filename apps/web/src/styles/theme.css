@@ -800,3 +800,23 @@ textarea.input:focus {
 .nav-move { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--fg-faint); font-size: 8px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 .nav-move:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .nav-move:disabled { opacity: 0.3; cursor: default; }
+
+
+/* ---------- onboarding tour (blocking) ---------- */
+.tour-overlay {
+  position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.96);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.tour-card {
+  max-width: 480px; width: 100%; text-align: center; border: 1px solid var(--accent);
+  border-radius: 14px; background: var(--surface); padding: 36px 32px;
+  box-shadow: 0 0 40px rgba(0, 255, 65, 0.25);
+}
+.tour-card img { margin-left: auto; margin-right: auto; display: block; }
+.tour-icon { font-size: 40px; margin-bottom: 10px; }
+.tour-title { font-size: 20px; margin-bottom: 10px; }
+.tour-body { font-size: 14px; color: var(--fg-muted); line-height: 1.6; min-height: 88px; }
+.tour-dots { display: flex; gap: 6px; justify-content: center; margin-top: 16px; }
+.tour-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.tour-dot.on { background: var(--accent); }
+.tour-dot.done { background: var(--accent); opacity: 0.4; }

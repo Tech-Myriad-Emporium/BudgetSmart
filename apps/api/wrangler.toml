@@ -39,3 +39,6 @@ STRIPE_PRICE_FAM_T3_YEAR  = "price_1ToXRC0dUdkblRR7en4fECKi"
 # Secrets (wrangler secret put): GMAIL_APP_PASSWORD, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 # Stripe price ids are set as vars once the products exist (see scripts/stripe-setup).
 # Secrets (wrangler secret put): JWT_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY
+
+[triggers]
+crons = ["*/2 * * * *"]

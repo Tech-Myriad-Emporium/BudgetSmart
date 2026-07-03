@@ -134,10 +134,7 @@ export function AppShell() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">$</span>
-          <span>
-            Budget<span className="brand-accent">Smart</span>
-          </span>
+          <img src="/brand.png" alt="BudgetSmart" style={{ height: 40, width: "auto", display: "block" }} />
         </div>
 
         <nav className="col gap-sm">

@@ -31,6 +31,9 @@ const rows = <T>(r: Record<string, unknown>[]): T[] => r as T[];
  * Users
  * ------------------------------------------------------------------ */
 export const users = {
+  markOnboarded(id: string): void {
+    db.prepare("UPDATE users SET onboarded = 1 WHERE id = ?").run(id);
+  },
   findByEmail(email: string): UserRow | undefined {
     return row<UserRow>(db.prepare("SELECT * FROM users WHERE email = ?").get(email));
   },
@@ -38,7 +41,7 @@ export const users = {
     return row<UserRow>(db.prepare("SELECT * FROM users WHERE id = ?").get(id));
   },
   create(input: { email: string; passwordHash: string; name: string; currency: string }): UserRow {
-    const r: UserRow = { id: newId(), createdAt: nowIso(), tier: "base", ...input };
+    const r: UserRow = { id: newId(), createdAt: nowIso(), tier: "base", onboarded: 0, ...input };
     db.prepare(
       "INSERT INTO users (id,email,passwordHash,name,currency,tier,createdAt) VALUES (?,?,?,?,?,?,?)",
     ).run(r.id, r.email, r.passwordHash, r.name, r.currency, r.tier, r.createdAt);

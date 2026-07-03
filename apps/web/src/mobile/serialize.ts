@@ -19,7 +19,7 @@ export function parseTags(raw: string): string[] {
 }
 
 export const serializeUser = (u: UserRow): User & { tier: string } => ({
-  id: u.id, email: u.email, name: u.name, currency: u.currency, tier: u.tier, createdAt: u.createdAt,
+  id: u.id, email: u.email, name: u.name, currency: u.currency, tier: u.tier, onboarded: true, createdAt: u.createdAt,
 });
 
 export const serializeFamilyLedgerEntry = (e: FamilyLedgerRow): FamilyLedgerEntry => ({

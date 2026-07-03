@@ -32,7 +32,7 @@ async function send(env: Env, to: string, subject: string, html: string, text: s
 
 const wrap = (title: string, body: string) => `<!doctype html><html><body style="margin:0;background:#000;color:#e6e6e6;font-family:system-ui,Segoe UI,Roboto,sans-serif">
   <div style="max-width:520px;margin:0 auto;padding:32px">
-    <div style="font-size:20px;font-weight:700;color:#00FF41;margin-bottom:20px">Budget<span style="color:#e6e6e6">Smart</span></div>
+    <img src="https://budgetsmarttme.com/brand.png" alt="BudgetSmart" height="44" style="display:block;height:44px;margin-bottom:20px"/>
     <h1 style="font-size:20px;margin:0 0 12px">${title}</h1>
     ${body}
     <p style="color:#7a7a7a;font-size:12px;margin-top:28px">If you didn't request this, you can ignore this email.</p>

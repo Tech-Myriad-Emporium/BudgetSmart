@@ -53,6 +53,7 @@ export const serializeUser = (u: UserRow): User & { tier: string } => ({
   name: u.name,
   currency: u.currency,
   tier: u.tier,
+  onboarded: intToBool(u.onboarded ?? 0),
   createdAt: u.createdAt,
 });
 

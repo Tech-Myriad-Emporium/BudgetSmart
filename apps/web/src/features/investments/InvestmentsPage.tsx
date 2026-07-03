@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ASSET_CLASS_LABELS,
   formatMoney,
@@ -6,13 +7,42 @@ import {
   type Holding,
   type Portfolio,
 } from "@budgetsmart/shared";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SpendDonut } from "../../components/charts";
 import { EmptyState, Money, Spinner } from "../../components/ui";
 import { usePortfolio, useProjection } from "../../lib/hooks";
+import { api } from "../../lib/api";
 import { HoldingModal } from "./HoldingModal";
 
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+
+
+/** Pull live market quotes into holdings' current prices. */
+function SyncPricesButton() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<string | null>(null);
+  const sync = useMutation({
+    mutationFn: () => api.refreshPrices(),
+    onSuccess: (r) => {
+      setMsg(r.updated > 0 ? `✓ ${r.updated} price${r.updated === 1 ? "" : "s"} updated` : "No symbols matched the market");
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      qc.invalidateQueries({ queryKey: ["networth"] });
+    },
+    onError: (e) => setMsg((e as Error).message),
+  });
+  useEffect(() => {
+    sync.mutate(); // auto-sync when the page opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="row gap-sm" style={{ alignItems: "center" }}>
+      {msg && <span className="faint text-xs">{msg}</span>}
+      <button className="btn btn-sm" onClick={() => sync.mutate()} disabled={sync.isPending} title="Update holding prices from live market data">
+        {sync.isPending ? <span className="ring" /> : "⟳ Sync market prices"}
+      </button>
+    </div>
+  );
+}
 
 export function InvestmentsPage() {
   const portfolioQ = usePortfolio();
@@ -33,6 +63,7 @@ export function InvestmentsPage() {
 
   return (
     <div className="page">
+      <div className="row" style={{ justifyContent: "flex-end" }}><SyncPricesButton /></div>
       {/* summary */}
       <div className="grid grid-3">
         <div className="card">

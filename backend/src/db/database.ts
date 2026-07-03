@@ -286,6 +286,8 @@ export function initSchema(): void {
   ensureColumn("email_prefs", "lastSentWeek", "lastSentWeek TEXT");
   // Shared (family) goals — members contribute from their wallets.
   ensureColumn("goals", "shared", "shared INTEGER NOT NULL DEFAULT 0");
+  // In-app onboarding tour completion.
+  ensureColumn("users", "onboarded", "onboarded INTEGER NOT NULL DEFAULT 0");
 }
 
 initSchema();

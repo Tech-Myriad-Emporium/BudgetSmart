@@ -1,5 +1,5 @@
 import { TIERS, formatMoney, type Tier } from "@budgetsmart/shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LanguagePicker, useI18n } from "./i18n";
 
 const DOMAIN = "budgetsmarttme.com";
@@ -17,10 +17,48 @@ const FEATURE_CARDS = [
 
 const STATUS_KEYS = ["status.api", "status.sync", "status.bank", "status.web", "status.notif"];
 
+const MARKET_URL = "https://budgetsmart-api.budgetsmart.workers.dev/market/summary";
+
+interface TickerQuote { label: string; price: number; changePct: number | null }
+
+/** Live market strip — quotes cached server-side, refreshed every minute. */
+function MarketTicker() {
+  const [quotes, setQuotes] = useState<TickerQuote[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch(MARKET_URL)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && d?.quotes && setQuotes(d.quotes))
+        .catch(() => { /* offline — hide */ });
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  if (quotes.length === 0) return null;
+  return (
+    <div className="ticker" aria-label="Live market data">
+      {quotes.map((q) => (
+        <span className="ticker-item" key={q.label}>
+          <span className="ticker-label">{q.label}</span>
+          <span className="mono">{q.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>
+          {q.changePct !== null && (
+            <span className={`mono ${q.changePct >= 0 ? "up" : "down"}`}>
+              {q.changePct >= 0 ? "▲" : "▼"}{Math.abs(q.changePct).toFixed(2)}%
+            </span>
+          )}
+        </span>
+      ))}
+      <span className="ticker-live">● LIVE</span>
+    </div>
+  );
+}
+
 export function App() {
   return (
     <>
       <Nav />
+      <MarketTicker />
       <Hero />
       <Features />
       <Pricing />
@@ -35,12 +73,9 @@ export function App() {
 
 function Brand() {
   return (
-    <div className="brand">
-      <span className="brand-mark">$</span>
-      <span>
-        Budget<span className="accent">Smart</span>
-      </span>
-    </div>
+    <a href="/" className="brand" aria-label="BudgetSmart home">
+      <img src="/brand.png" alt="BudgetSmart" className="brand-img" />
+    </a>
   );
 }
 

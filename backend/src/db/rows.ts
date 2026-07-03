@@ -8,6 +8,7 @@ export interface UserRow {
   currency: string;
   tier: string;
   createdAt: string;
+  onboarded: number;
 }
 
 export interface CentralLinkRow {
@@ -67,6 +68,7 @@ export interface FamilyRequestRow {
   resolvedAt: string | null;
 }
 
+// (users get onboarded via migration; see UserRow below)
 export interface RecurringOverrideRow {
   userId: string;
   key: string;
