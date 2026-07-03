@@ -20,3 +20,4 @@ export * from "./digest/engine.js";
 export * from "./pulse/engine.js";
 export * from "./weekly/engine.js";
 export * from "./version.js";
+export * from "./backtest/engine.js";

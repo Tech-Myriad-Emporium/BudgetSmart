@@ -130,3 +130,69 @@ export async function refreshMarket(env: Env): Promise<void> {
     if (q) await writeCache(env, q);
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Monthly price history (for backtesting). Source: Yahoo's public chart
+ * API, cached in D1 for 24h per symbol so upstream sees ~1 call/day/symbol.
+ * ------------------------------------------------------------------ */
+const HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
+
+export interface HistoryPoint {
+  month: string; // YYYY-MM
+  close: number;
+}
+
+/** Normalize app symbols → Yahoo symbols (crypto pairs → -USD). */
+function toYahooSymbol(raw: string): string {
+  const s = raw.trim().toUpperCase();
+  const m = s.match(/^BINANCE:(\w+?)USDT$/);
+  if (m) return `${m[1]}-USD`;
+  if (["BTC", "ETH", "SOL", "DOGE", "ADA", "XRP", "LTC", "BNB"].includes(s)) return `${s}-USD`;
+  return s;
+}
+
+export async function getHistory(env: Env, rawSymbol: string, years: number): Promise<HistoryPoint[]> {
+  const symbol = toYahooSymbol(rawSymbol);
+  const meta = await env.DB.prepare("SELECT fetched_at FROM market_history_meta WHERE symbol = ?")
+    .bind(symbol)
+    .first<{ fetched_at: number }>();
+
+  if (!meta || Date.now() - meta.fetched_at > HISTORY_TTL_MS) {
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&range=${Math.min(20, Math.max(1, years))}y`,
+        { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000) },
+      );
+      if (res.ok) {
+        const d = (await res.json()) as {
+          chart?: { result?: Array<{ timestamp?: number[]; indicators?: { quote?: Array<{ close?: Array<number | null> }> } }> };
+        };
+        const r = d.chart?.result?.[0];
+        const ts = r?.timestamp ?? [];
+        const closes = r?.indicators?.quote?.[0]?.close ?? [];
+        if (ts.length > 0) {
+          for (let i = 0; i < ts.length; i++) {
+            const close = closes[i];
+            if (typeof close !== "number" || close <= 0) continue;
+            const month = new Date(ts[i]! * 1000).toISOString().slice(0, 7);
+            await env.DB.prepare(
+              "INSERT INTO market_history (symbol, month, close) VALUES (?,?,?) ON CONFLICT(symbol, month) DO UPDATE SET close=excluded.close",
+            ).bind(symbol, month, close).run();
+          }
+          await env.DB.prepare(
+            "INSERT INTO market_history_meta (symbol, fetched_at) VALUES (?,?) ON CONFLICT(symbol) DO UPDATE SET fetched_at=excluded.fetched_at",
+          ).bind(symbol, Date.now()).run();
+        }
+      }
+    } catch {
+      /* fall through to whatever is cached */
+    }
+  }
+
+  const from = new Date();
+  from.setUTCFullYear(from.getUTCFullYear() - years);
+  const rows = await env.DB.prepare(
+    "SELECT month, close FROM market_history WHERE symbol = ? AND month >= ? ORDER BY month ASC",
+  ).bind(symbol, from.toISOString().slice(0, 7)).all<{ month: string; close: number }>();
+  return (rows.results ?? []).map((r) => ({ month: r.month, close: r.close }));
+}

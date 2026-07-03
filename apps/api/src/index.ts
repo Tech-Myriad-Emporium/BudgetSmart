@@ -6,7 +6,7 @@ import { sendVerificationEmail, sendFamilyInviteEmail, sendMonthlyDigestEmail, t
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
 import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
-import { CORE_SYMBOLS, getQuotes, refreshMarket, toProviderSymbol } from "./market.js";
+import { CORE_SYMBOLS, getHistory, getQuotes, refreshMarket, toProviderSymbol } from "./market.js";
 import type { AccountView, Env, UserRow } from "./types.js";
 
 type Vars = { userId: string };
@@ -757,6 +757,15 @@ app.get("/market/summary", async (c) => {
   return c.json({
     quotes: CORE_SYMBOLS.map((s) => ({ label: s.label, ...byId.get(s.symbol) })).filter((q) => typeof (q as { price?: number }).price === "number"),
   });
+});
+
+app.get("/market/history", async (c) => {
+  const symbol = (c.req.query("symbol") ?? "").trim();
+  if (!symbol) return c.json({ error: "Pass ?symbol=SPY" }, 400);
+  const years = Math.min(20, Math.max(1, Number(c.req.query("years")) || 8));
+  const points = await getHistory(c.env, symbol, years);
+  if (points.length === 0) return c.json({ error: "No history for that symbol" }, 404);
+  return c.json({ symbol: symbol.toUpperCase(), points });
 });
 
 app.get("/market/quote", async (c) => {

@@ -6,6 +6,9 @@ import {
   type GrowthProjection,
   type Holding,
   type Portfolio,
+  runBacktest,
+  type BacktestResult,
+  type BacktestPoint,
 } from "@budgetsmart/shared";
 import { useState, useEffect } from "react";
 import { SpendDonut } from "../../components/charts";
@@ -41,6 +44,118 @@ function SyncPricesButton() {
         {sync.isPending ? <span className="ring" /> : "⟳ Sync market prices"}
       </button>
     </div>
+  );
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Backtesting: replay a monthly plan against real market history.
+ * ------------------------------------------------------------------ */
+const HISTORY_URL = "https://budgetsmart-api.budgetsmart.workers.dev/market/history";
+
+async function fetchHistory(symbol: string, years: number) {
+  const r = await fetch(`${HISTORY_URL}?symbol=${encodeURIComponent(symbol)}&years=${years}`);
+  if (!r.ok) throw new Error(`No history found for ${symbol.toUpperCase()}`);
+  return ((await r.json()) as { points: Array<{ month: string; close: number }> }).points;
+}
+
+function BacktestCard() {
+  const thisYear = new Date().getUTCFullYear();
+  const [symbol, setSymbol] = useState("SPY");
+  const [compare, setCompare] = useState("");
+  const [monthly, setMonthly] = useState("200");
+  const [sinceYear, setSinceYear] = useState(thisYear - 8);
+  const [results, setResults] = useState<BacktestResult[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run() {
+    const cents = Math.round((parseFloat(monthly) || 0) * 100);
+    if (!symbol.trim() || cents <= 0) return;
+    setBusy(true); setErr(null);
+    try {
+      const years = thisYear - sinceYear + 1;
+      const start = `${sinceYear}-01`;
+      const symbols = [symbol.trim(), compare.trim()].filter(Boolean);
+      const out: BacktestResult[] = [];
+      for (const sym of symbols) {
+        const closes = await fetchHistory(sym, years);
+        const r = runBacktest(sym, closes, cents, start);
+        if (!r) throw new Error(`Not enough history for ${sym.toUpperCase()} since ${sinceYear}`);
+        out.push(r);
+      }
+      setResults(out);
+    } catch (e) {
+      setErr((e as Error).message);
+      setResults([]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <span className="card-title">⏪ Backtest — what if you'd invested?</span>
+      <div className="row gap-sm wrap" style={{ marginTop: 12 }}>
+        <input className="input btn-sm mono" style={{ width: 90, textTransform: "uppercase" }} value={symbol}
+          onChange={(e) => setSymbol(e.target.value)} placeholder="SPY" title="Ticker (US stocks/ETFs, BTC, ETH)" />
+        <div className="input-prefix" style={{ width: 100 }}>
+          <span>$</span>
+          <input className="input mono btn-sm" style={{ padding: "6px 8px 6px 22px", width: "100%" }} inputMode="decimal"
+            value={monthly} onChange={(e) => setMonthly(e.target.value)} title="Monthly contribution" />
+        </div>
+        <span className="faint text-xs" style={{ alignSelf: "center" }}>/mo since</span>
+        <select className="select btn-sm" style={{ width: 90 }} value={sinceYear} onChange={(e) => setSinceYear(Number(e.target.value))}>
+          {[3, 5, 8, 10, 15].map((n) => (
+            <option key={n} value={thisYear - n}>{thisYear - n}</option>
+          ))}
+        </select>
+        <input className="input btn-sm mono" style={{ width: 110, textTransform: "uppercase" }} value={compare}
+          onChange={(e) => setCompare(e.target.value)} placeholder="vs… (QQQ)" title="Optional second symbol to compare" />
+        <button className="btn btn-primary btn-sm" onClick={run} disabled={busy}>{busy ? <span className="ring" /> : "Run backtest"}</button>
+      </div>
+      {err && <div className="text-xs" style={{ color: "var(--danger)", marginTop: 8 }}>{err}</div>}
+
+      {results.length > 0 && (
+        <div className="grid grid-2" style={{ marginTop: 14, gap: 14 }}>
+          {results.map((r) => (
+            <div key={r.symbol} className="col gap-sm" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
+              <div className="row between">
+                <span className="text-sm" style={{ fontWeight: 600 }}>{r.symbol}</span>
+                <span className="faint text-xs">{r.startMonth} → {r.endMonth}</span>
+              </div>
+              <BacktestChart points={r.points} />
+              <div className="row between text-xs">
+                <span className="faint">invested {formatMoney(r.invested)}</span>
+                <span>now <Money cents={r.finalValue} className="text-xs" /></span>
+                <span className={r.gain >= 0 ? "accent" : "danger"}>
+                  {r.gain >= 0 ? "+" : ""}{formatMoney(r.gain)} ({(r.gainPct * 100).toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="faint text-xs" style={{ marginTop: 10 }}>
+        Monthly dollar-cost averaging at real historical closes. Past performance isn't a promise about the future.
+      </div>
+    </div>
+  );
+}
+
+function BacktestChart({ points }: { points: BacktestPoint[] }) {
+  if (points.length < 2) return null;
+  const W = 320, H = 90, P = 4;
+  const max = Math.max(...points.map((p) => Math.max(p.value, p.invested)), 1);
+  const x = (i: number) => P + (i / (points.length - 1)) * (W - P * 2);
+  const y = (v: number) => H - P - (v / max) * (H - P * 2);
+  const line = (get: (p: BacktestPoint) => number) =>
+    points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(get(p)).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }} role="img" aria-label="Backtest chart">
+      <path d={line((p) => p.invested)} fill="none" stroke="var(--fg-faint)" strokeWidth={1.5} strokeDasharray="4 3" />
+      <path d={line((p) => p.value)} fill="none" stroke="var(--accent)" strokeWidth={2} />
+    </svg>
   );
 }
 
@@ -156,6 +271,7 @@ export function InvestmentsPage() {
       ) : null}
 
       {modalOpen && <HoldingModal existing={editing} onClose={() => setModalOpen(false)} />}
+      <BacktestCard />
     </div>
   );
 }
