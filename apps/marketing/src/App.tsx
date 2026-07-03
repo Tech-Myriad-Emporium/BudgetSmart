@@ -420,6 +420,7 @@ const LINUX_APPIMAGE = "https://budgetsmart-api.budgetsmart.workers.dev/download
 const ANDROID_APK = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk";
 const MAC_ARM_DMG = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-arm64.dmg";
 const MAC_X64_DMG = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-x64.dmg";
+const IOS_IPA = "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.ipa";
 
 const APT_INSTALL = `curl -fsSL https://budgetsmart-api.budgetsmart.workers.dev/apt/budgetsmart.gpg \\
   | sudo tee /usr/share/keyrings/budgetsmart.gpg > /dev/null
@@ -436,7 +437,7 @@ function Downloads() {
     { os: "macOS", icon: "", meta: "Intel Macs", file: MAC_X64_DMG },
     { os: "Linux", icon: "🐧", meta: "AppImage · any distro", file: LINUX_APPIMAGE },
     { os: "Android", icon: "🤖", meta: "Android 7+ · APK", file: ANDROID_APK },
-    { os: "iOS", icon: "", meta: "iPhone & iPad", file: null },
+    { os: "iOS", icon: "", meta: "Sideload · AltStore / Sideloadly", file: IOS_IPA },
   ];
   return (
     <section id="download">
@@ -461,6 +462,10 @@ function Downloads() {
         </div>
         <p className="section-sub" style={{ fontSize: 13, marginTop: 4 }}>
           {t("dl.apkNote")}
+        </p>
+        <p className="section-sub" style={{ fontSize: 13, marginTop: 4 }}>
+          {t("dl.iosNote")} <a className="accent" href="https://altstore.io" target="_blank" rel="noreferrer">altstore.io</a> ·{" "}
+          <a className="accent" href="https://sideloadly.io" target="_blank" rel="noreferrer">sideloadly.io</a>
         </p>
         <div className="apt-box">
           <div className="apt-title">{t("dl.aptTitle")}</div>

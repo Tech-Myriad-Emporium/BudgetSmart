@@ -1,0 +1,58 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies + build web
+        run: |
+          npm install --no-audit --no-fund
+          npm --prefix shared install --no-audit --no-fund
+          npm run build:shared
+          npm --prefix apps/web install --no-audit --no-fund
+          npm run link:shared
+          npm --prefix apps/web run build
+
+      - name: Capacitor sync (copy web assets into the iOS project)
+        run: cd apps/web && npx cap sync ios
+
+      - name: Build unsigned iOS app
+        run: |
+          cd apps/web/ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa (unsigned — for sideloading via AltStore/Sideloadly)
+        run: |
+          cd apps/web/ios/App
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry BudgetSmart.ipa Payload
+          ls -la BudgetSmart.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgetsmart-ios
+          path: apps/web/ios/App/BudgetSmart.ipa
+          if-no-files-found: error
+
+      - name: Publish ipa to the download link
+        env:
+          UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
+        run: node scripts/r2-upload.mjs apps/web/ios/App/BudgetSmart.ipa BudgetSmart.ipa

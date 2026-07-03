@@ -162,6 +162,7 @@ const LATEST = {
   macIntel: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart-x64.dmg",
   linux: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.AppImage",
   android: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.apk",
+  ios: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.ipa",
 };
 app.get("/version", (c) => c.json(LATEST));
 
