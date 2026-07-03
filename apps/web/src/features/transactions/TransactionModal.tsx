@@ -19,31 +19,40 @@ const TYPE_LABEL: Record<TransactionType, string> = {
   transfer: "Transfer",
 };
 
+export interface TransactionDraft {
+  merchant?: string;
+  amount?: number; // cents
+  date?: string;
+  tags?: string[];
+}
+
 export function TransactionModal({
   accounts,
   categories,
   existing,
+  draft,
   onClose,
 }: {
   accounts: Account[];
   categories: Category[];
   existing?: Transaction | null;
+  draft?: TransactionDraft | null;
   onClose: () => void;
 }) {
   const { create, update, remove } = useTransactionMutations();
   const editing = !!existing;
 
   const [type, setType] = useState<TransactionType>(existing?.type ?? "expense");
-  const [amount, setAmount] = useState(existing ? String(existing.amount / 100) : "");
-  const [merchant, setMerchant] = useState(existing?.merchant ?? "");
+  const [amount, setAmount] = useState(existing ? String(existing.amount / 100) : draft?.amount ? String(draft.amount / 100) : "");
+  const [merchant, setMerchant] = useState(existing?.merchant ?? draft?.merchant ?? "");
   const [accountId, setAccountId] = useState(existing?.accountId ?? accounts[0]?.id ?? "");
   const [transferAccountId, setTransferAccountId] = useState(
     existing?.transferAccountId ?? accounts[1]?.id ?? "",
   );
   const [categoryId, setCategoryId] = useState<string>(existing?.categoryId ?? "");
-  const [date, setDate] = useState(existing?.date ?? todayIso());
+  const [date, setDate] = useState(existing?.date ?? draft?.date ?? todayIso());
   const [note, setNote] = useState(existing?.note ?? "");
-  const [tags, setTags] = useState((existing?.tags ?? []).join(", "));
+  const [tags, setTags] = useState((existing?.tags ?? draft?.tags ?? []).join(", "));
   const [error, setError] = useState("");
 
   const relevantCategories = categories.filter((c) =>

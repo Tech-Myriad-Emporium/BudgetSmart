@@ -4,13 +4,69 @@ import { EmptyState, Money, Spinner } from "../../components/ui";
 import { useAccounts, useCategories, useTransactions } from "../../lib/hooks";
 import type { TransactionFilters } from "../../lib/api";
 import { formatDateShort } from "../../lib/format";
-import { TransactionModal } from "./TransactionModal";
+import { TransactionModal, type TransactionDraft } from "./TransactionModal";
+import { parseReceipt } from "@budgetsmart/shared";
+import { useEntitlements } from "../../lib/hooks";
+import { useRef } from "react";
+
+/** On-device receipt OCR → prefilled transaction. Assets ship with the app. */
+function ScanReceiptButton({ onDraft }: { onDraft: (d: TransactionDraft) => void }) {
+  const { has } = useEntitlements();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  if (!has("import")) return null; // Receipt OCR rides the T1 automation bundle
+
+  async function onFile(file: File) {
+    setStatus("Reading receipt… 0%");
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng", 1, {
+        workerPath: "/ocr/worker.min.js",
+        corePath: "/ocr/tesseract-core-simd-lstm.wasm.js",
+        langPath: "/ocr",
+        gzip: true,
+        logger: (m: { status: string; progress: number }) => {
+          if (m.status === "recognizing text") setStatus(`Reading receipt… ${Math.round(m.progress * 100)}%`);
+        },
+      } as never);
+      const { data } = await worker.recognize(file);
+      await worker.terminate();
+      const parsed = parseReceipt(data.text ?? "");
+      if (!parsed.total && !parsed.merchant) {
+        setStatus("Couldn't read that image — try a sharper, straight-on photo.");
+        return;
+      }
+      setStatus(null);
+      onDraft({
+        merchant: parsed.merchant ?? "",
+        amount: parsed.total ?? undefined,
+        date: parsed.date ?? undefined,
+        tags: ["receipt"],
+      });
+    } catch {
+      setStatus("OCR failed — try again or enter it manually.");
+    }
+  }
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+      <button className="btn" onClick={() => fileRef.current?.click()} title="Photograph or upload a receipt — everything is read on this device">
+        📷 Scan receipt
+      </button>
+      {status && <span className="faint text-xs" style={{ alignSelf: "center" }}>{status}</span>}
+    </>
+  );
+}
 
 export function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({ limit: 100, offset: 0 });
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [draft, setDraft] = useState<TransactionDraft | null>(null);
 
   const accountsQ = useAccounts();
   const categoriesQ = useCategories();
@@ -35,6 +91,12 @@ export function TransactionsPage() {
 
   function openNew() {
     setEditing(null);
+    setDraft(null);
+    setModalOpen(true);
+  }
+  function openFromReceipt(d: TransactionDraft) {
+    setEditing(null);
+    setDraft(d);
     setModalOpen(true);
   }
   function openEdit(t: Transaction) {
@@ -92,6 +154,7 @@ export function TransactionsPage() {
               ))}
             </select>
           </div>
+          <ScanReceiptButton onDraft={openFromReceipt} />
           <button className="btn btn-primary" onClick={openNew} disabled={accounts.length === 0}>
             + Add
           </button>
@@ -160,7 +223,8 @@ export function TransactionsPage() {
           accounts={accounts}
           categories={categories}
           existing={editing}
-          onClose={() => setModalOpen(false)}
+          draft={draft}
+          onClose={() => { setModalOpen(false); setDraft(null); }}
         />
       )}
     </div>
