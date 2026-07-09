@@ -2,7 +2,9 @@
 //   web/            built web UI (apps/web/dist)
 //   server/dist     compiled backend
 //   server/node_modules + package.json   backend runtime deps (incl. @budgetsmart/shared)
-import { cpSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,8 +34,32 @@ console.log("staging backend node_modules (this is the slow part)…");
 cpSync(path.join(repo, "backend", "node_modules"), path.join(res, "server", "node_modules"), { recursive: true });
 
 // Bundle the Node runtime so the installed app needs no system Node (Electron's
-// own Node lacks node:sqlite). Copies the Node that's running this script.
-console.log("staging node.exe runtime…");
-cpSync(process.execPath, path.join(res, path.basename(process.execPath)));
+// own Node lacks node:sqlite). Normally we copy the Node running this script.
+// When CROSS-building (e.g. a macOS x64 dmg on an Apple-Silicon runner), the
+// bundled runtime must match the TARGET arch — so we fetch the exact Node for
+// it. This removes any dependency on the retiring macos-13 Intel CI runners.
+const nodeName = path.basename(process.execPath); // "node" (posix) | "node.exe" (win)
+const targetArch = process.env.STAGE_NODE_ARCH;
+if (targetArch && targetArch !== process.arch && process.platform === "darwin") {
+  const ver = process.version; // e.g. v24.3.0
+  const base = `node-${ver}-darwin-${targetArch}`;
+  const url = `https://nodejs.org/dist/${ver}/${base}.tar.gz`;
+  console.log(`staging cross-arch Node runtime (${base})…`);
+  const tmp = path.join(os.tmpdir(), `stage-node-${targetArch}`);
+  rmSync(tmp, { recursive: true, force: true });
+  mkdirSync(tmp, { recursive: true });
+  const tgz = path.join(tmp, "node.tar.gz");
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error(`Failed to download ${url}: HTTP ${resp.status}`);
+    process.exit(1);
+  }
+  writeFileSync(tgz, Buffer.from(await resp.arrayBuffer()));
+  execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: "inherit" });
+  cpSync(path.join(tmp, base, "bin", "node"), path.join(res, nodeName));
+} else {
+  console.log("staging node runtime…");
+  cpSync(process.execPath, path.join(res, nodeName));
+}
 
 console.log("✓ staged app-resources");

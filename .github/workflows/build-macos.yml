@@ -8,14 +8,13 @@ on:
 
 jobs:
   mac:
+    # Both arches build on Apple Silicon runners (macos-latest). The x64 build
+    # bundles an explicitly-downloaded darwin-x64 Node (see stage.mjs), so it's a
+    # correct Intel build without depending on the retiring macos-13 runners.
+    runs-on: macos-latest
     strategy:
       matrix:
-        include:
-          - runner: macos-latest
-            arch: arm64
-          - runner: macos-13
-            arch: x64
-    runs-on: ${{ matrix.runner }}
+        arch: [arm64, x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +37,9 @@ jobs:
           npm --prefix backend run build
           npm --prefix apps/web run build
 
-      - name: Stage app resources (bundles the macOS Node runtime)
+      - name: Stage app resources (bundles the target-arch macOS Node runtime)
+        env:
+          STAGE_NODE_ARCH: ${{ matrix.arch }}
         run: |
           cd apps/desktop
           node stage.mjs
