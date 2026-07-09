@@ -89,7 +89,7 @@ export function simulateCardPayoff(
 }
 
 /* ------------------------------------------------------------------ *
- * Credit utilization → potential credit-score gains (rough estimate)
+ * Credit utilization → potential credit-score gains (illustrative estimate)
  * ------------------------------------------------------------------ */
 function bandFor(util: number): UtilizationBand {
   if (util <= 0.1) return "excellent";
@@ -99,11 +99,49 @@ function bandFor(util: number): UtilizationBand {
   return "maxed";
 }
 
-export function estimateCreditGain(balance: Cents, creditLimit: Cents): CreditGainEstimate {
+/** US median-ish anchor when the user hasn't told us their score. */
+export const DEFAULT_CREDIT_SCORE = 680;
+const MAX_SCORE = 850;
+const MIN_SCORE = 300;
+
+/**
+ * Points currently lost to utilization, on a nonlinear curve: the first
+ * stretch above 10% costs the most per percentage point, and being maxed
+ * (or over limit) adds a further hit. Interpolated between breakpoints.
+ */
+function utilizationPenalty(util: number): number {
+  const pts: Array<[number, number]> = [
+    [0.1, 0],
+    [0.3, 40],
+    [0.5, 65],
+    [0.75, 85],
+    [1.0, 110],
+  ];
+  if (util <= pts[0]![0]) return 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [u0, p0] = pts[i - 1]!;
+    const [u1, p1] = pts[i]!;
+    if (util <= u1) return p0 + ((util - u0) / (u1 - u0)) * (p1 - p0);
+  }
+  return pts[pts.length - 1]![1]; // over-limit caps at the maxed penalty
+}
+
+/**
+ * Estimate the score gain from paying down to ~10% utilization, anchored to
+ * the user's actual starting score: lower scores have more utilization upside;
+ * high scores are already near the ceiling so the same payoff moves them less.
+ * Utilization is ~30% of FICO — this is illustrative, never a guarantee.
+ */
+export function estimateCreditGain(balance: Cents, creditLimit: Cents, currentScore?: number): CreditGainEstimate {
   const util = creditLimit > 0 ? balance / creditLimit : 0;
-  // Utilization is ~30% of a FICO score; moving from very high to <=10% can swing
-  // a meaningful chunk. This is an illustrative estimate, not a guarantee.
-  const estimatedScoreGain = Math.round(clamp(util - 0.1, 0, 1) * 80);
+  const scoreAssumed = currentScore == null || !Number.isFinite(currentScore);
+  const score = clamp(Math.round(scoreAssumed ? DEFAULT_CREDIT_SCORE : currentScore!), MIN_SCORE, MAX_SCORE);
+
+  // How much of the utilization penalty is plausibly recoverable at this score.
+  const recoveryFactor = score < 600 ? 1.1 : score < 680 ? 1.0 : score < 740 ? 0.85 : score < 800 ? 0.6 : 0.35;
+  const rawGain = utilizationPenalty(util) * recoveryFactor;
+  const estimatedScoreGain = Math.round(clamp(rawGain, 0, MAX_SCORE - score));
+
   return {
     creditLimit,
     currentBalance: balance,
@@ -112,6 +150,9 @@ export function estimateCreditGain(balance: Cents, creditLimit: Cents): CreditGa
     excellentBalance: Math.round(creditLimit * 0.1),
     band: bandFor(util),
     estimatedScoreGain,
+    currentScore: score,
+    scoreAssumed,
+    projectedScore: Math.min(MAX_SCORE, score + estimatedScoreGain),
   };
 }
 
@@ -122,6 +163,8 @@ export interface CreditCardInput {
   balance: Cents;
   aprBps: number;
   creditLimit: Cents;
+  /** The user's current credit score (anchors the gain estimate). */
+  currentScore?: number;
   minFloor?: Cents;
   minPercent?: number;
   /** Optional custom "average" payoff target in months (default 36). */
@@ -173,6 +216,6 @@ export function analyzeCreditCard(input: CreditCardInput, now: Date = new Date()
     recommended,
     interestSavedVsMin: Math.max(0, minSim.totalInterest - aggrSim.totalInterest),
     monthsSavedVsMin: Math.max(0, minSim.months - aggrSim.months),
-    credit: estimateCreditGain(balance, creditLimit),
+    credit: estimateCreditGain(balance, creditLimit, input.currentScore),
   };
 }

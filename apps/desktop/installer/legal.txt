@@ -1,0 +1,68 @@
+BUDGETSMART — LEGAL NOTICE AND TERMS OF USE
+Tech Myriad Emporium LLC, an Ohio limited liability company (online-only business)
+Effective: July 8, 2026
+
+Read this before installing. Installing or using BudgetSmart means you
+accept the full Terms of Service and Privacy Policy, published at:
+
+    https://budgetsmarttme.com/terms
+    https://budgetsmarttme.com/privacy
+
+The points below are a plain-language summary. The full documents control.
+
+1. NOT FINANCIAL ADVICE. BudgetSmart produces estimates and educational
+   information only: budgets, forecasts, payoff plans, tax projections and
+   credit-score estimates. It is not financial, investment, tax or legal
+   advice, and TME is not your fiduciary, adviser, broker or tax preparer.
+   Verify any number that matters with a qualified professional.
+
+2. YOUR ACCOUNT, YOUR KEYS. You are responsible for your password, your
+   email inbox, your devices, and anyone you share seats with. Use a strong
+   unique password and turn on two-factor authentication (it's free).
+
+3. HACKED ACCOUNTS. No online service can be made perfectly secure.
+   To the maximum extent permitted by law, TME is not liable for losses from
+   unauthorized access caused by compromise of your credentials, email or
+   devices, and is not obligated to refund subscriptions, codes or seats in
+   connection with such access. We WILL make commercially reasonable efforts
+   to help you recover a compromised account -- contact
+   budgetsmart.techmyriademporium@gmail.com immediately. Rights that cannot
+   be waived by law are not waived.
+
+4. YOUR DATA. The app is local-first: your transactions, budgets and goals
+   are stored on this device and work offline. Only the data listed in the
+   Privacy Policy leaves it (account/plan status; optional email-recap
+   totals; optional shared-plan headline numbers; ticker symbols for
+   prices). We do not sell personal information. Export to CSV any time.
+
+5. BILLING. Payments are processed by PCI DSS-validated processors
+   (currently Stripe); TME never stores full card numbers. Subscriptions
+   renew until cancelled. Except as required by law or stated in the Terms,
+   fees are non-refundable.
+
+6. COMPLIANCE. TME maintains a compliance program referencing: OFAC
+   sanctions (50 U.S.C. 1701 et seq.; 31 C.F.R. Parts 500-599); the Bank
+   Secrecy Act and FinCEN rules (31 U.S.C. 5311 et seq.; 31 C.F.R. Ch. X),
+   including KYC under USA PATRIOT Act sec. 326; PCI DSS v4 and card
+   network rules via our processors; Nacha Operating Rules (upon launch of
+   ACH features); money-transmission laws incl. Ohio Rev. Code Ch. 1315 and
+   FinCEN MSB registration (31 C.F.R. 1022.380) before any money movement;
+   GLBA (15 U.S.C. 6801-6809), the FTC Safeguards Rule (16 C.F.R. Part
+   314), CCPA/CPRA, VCDPA, Colorado CPA, GDPR (EU 2016/679), COPPA, and
+   Ohio Rev. Code Ch. 1354 and 1349.19. Security program modeled on NIST
+   CSF 2.0 and ISO/IEC 27001:2022; SOC 2 Type I & II attestations are in
+   progress and will be announced only when earned. BudgetSmart does not
+   currently hold or transmit customer funds. We also track 23 NYCRR Part
+   500 (NY DFS) and EU Regulation 2022/2554 (DORA) as benchmarks.
+
+7. DISCLAIMER AND LIABILITY CAP. The software is provided "AS IS" without
+   warranties. TME's total liability is capped as stated in the Terms
+   (generally the greater of $50 or 12 months of fees). Disputes are
+   resolved by individual arbitration under the Federal Arbitration Act,
+   with a small-claims option and a 30-day arbitration opt-out; Ohio law
+   governs. You and TME each waive jury trial and class actions.
+
+8. CHILDREN. Not for children under 13 (COPPA, 15 U.S.C. 6501-6506).
+
+By checking the box below and continuing, you confirm you have read this
+notice and agree to the Terms of Service and Privacy Policy.

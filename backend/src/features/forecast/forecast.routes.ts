@@ -1,11 +1,12 @@
 import { buildForecast } from "@budgetsmart/shared";
 import { Router } from "express";
-import { accounts, categories, transactions } from "../../db/repo.js";
+import { accounts, categories, scheduledCharges, transactions } from "../../db/repo.js";
 import { computeBalancesForUser } from "../../lib/balances.js";
 import { asyncHandler } from "../../lib/http.js";
 import { serializeAccount, serializeCategory, serializeTransaction } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
 import { overridesFor } from "../recurring/recurring.routes.js";
+import { serializeScheduledCharge } from "../schedule/schedule.routes.js";
 
 export const forecastRouter = Router();
 forecastRouter.use(requireAuth);
@@ -23,6 +24,7 @@ forecastRouter.get(
         .listByUser(userId, { activeOnly: true })
         .map((a) => serializeAccount(a, balances.get(a.id) ?? a.openingBalance)),
       recurringOverrides: overridesFor(userId),
+      scheduled: scheduledCharges.list(userId).map(serializeScheduledCharge),
     });
     res.json({ summary });
   }),

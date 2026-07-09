@@ -22,6 +22,7 @@ const M: Record<string, Partial<Record<Locale, string>>> = {
   "nav.pricing": { en: "Pricing", es: "Precios", fr: "Tarifs", de: "Preise", pt: "Preços", zh: "价格", ja: "料金", hi: "मूल्य", ar: "الأسعار" },
   "nav.download": { en: "Download", es: "Descargar", fr: "Télécharger", de: "Download", pt: "Baixar", zh: "下载", ja: "ダウンロード", hi: "डाउनलोड", ar: "تنزيل" },
   "nav.status": { en: "Status", es: "Estado", fr: "Statut", de: "Status", pt: "Status", zh: "状态", ja: "ステータス", hi: "स्थिति", ar: "الحالة" },
+  "nav.help": { en: "Help", es: "Ayuda", fr: "Aide", de: "Hilfe", pt: "Ajuda", zh: "帮助", ja: "ヘルプ", hi: "सहायता", ar: "مساعدة" },
   "nav.account": { en: "Account", es: "Cuenta", fr: "Compte", de: "Konto", pt: "Conta", zh: "账户", ja: "アカウント", hi: "खाता", ar: "الحساب" },
   "nav.get": { en: "Get the app →", es: "Obtener la app →", fr: "Obtenir l'app →", de: "App holen →", pt: "Baixar o app →", zh: "获取应用 →", ja: "アプリを入手 →", hi: "ऐप पाएं →", ar: "احصل على التطبيق ←" },
 

@@ -88,6 +88,50 @@ export interface Transaction {
   createdAt: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * Scheduled charges — user-defined recurring / one-time / custom-interval
+ * charges pinned to exact dates. Shown on the calendar & forecast; can
+ * auto-post as real transactions when the date arrives.
+ * ------------------------------------------------------------------ */
+export type ScheduledChargeType = "recurring" | "once" | "custom";
+export type ScheduledChargeCadence = "weekly" | "biweekly" | "monthly" | "yearly";
+
+export interface ScheduledCharge {
+  id: string;
+  name: string;
+  icon: string;
+  /** Positive magnitude in cents. */
+  amount: Cents;
+  direction: "expense" | "income";
+  type: ScheduledChargeType;
+  cadence: ScheduledChargeCadence | null;
+  /** Every N days (custom type). */
+  intervalDays: number | null;
+  /** ISO date (YYYY-MM-DD) of the next occurrence. */
+  nextDate: string;
+  endDate: string | null;
+  categoryId: string | null;
+  accountId: string | null;
+  /** Create the real transaction automatically when due. */
+  autoPost: boolean;
+  active: boolean;
+}
+
+export interface ScheduledChargeInput {
+  name: string;
+  icon?: string;
+  amount: Cents;
+  direction?: "expense" | "income";
+  type: ScheduledChargeType;
+  cadence?: ScheduledChargeCadence | null;
+  intervalDays?: number | null;
+  nextDate: string;
+  endDate?: string | null;
+  categoryId?: string | null;
+  accountId?: string | null;
+  autoPost?: boolean;
+}
+
 export interface Budget {
   id: string;
   categoryId: string;
@@ -342,6 +386,12 @@ export interface CreditGainEstimate {
   band: UtilizationBand;
   /** Rough estimated score points to gain by reaching ~10% utilization. */
   estimatedScoreGain: number;
+  /** The starting score the estimate is anchored to (user-supplied or 680 default). */
+  currentScore: number;
+  /** True when the user didn't provide a score and the default was used. */
+  scoreAssumed: boolean;
+  /** currentScore + estimatedScoreGain, capped at 850. */
+  projectedScore: number;
 }
 
 export interface CreditCardAnalysis {

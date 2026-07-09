@@ -68,8 +68,8 @@ export function AccountPage() {
       localStorage.removeItem(INVITE_KEY);
       const a = await api("/family/accept", { method: "POST", body: JSON.stringify({ token: pending }) });
       setNotice(a.ok
-        ? { kind: "ok", text: "🎉 Family invite accepted — you now share the family plan." }
-        : { kind: "err", text: a.data.error ?? "Couldn't accept the family invite." });
+        ? { kind: "ok", text: "🎉 Invite accepted — you now share the plan and its premium features." }
+        : { kind: "err", text: a.data.error ?? "Couldn't accept the invite." });
     }
     const r = await api<{ account: Account }>("/me");
     if (r.ok) {
@@ -116,7 +116,7 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
       return { kind: "err", text: "Google sign-in didn't complete. Please try again." };
     }
     if (localStorage.getItem(INVITE_KEY)) {
-      return { kind: "info", text: "👨‍👩‍👧‍👦 You have a family invite waiting — sign in (or create a free account) with the invited email to accept it." };
+      return { kind: "info", text: "🤝 You have a plan invite waiting — sign in (or create a free account) with the invited email to accept it." };
     }
     return null;
   });
@@ -178,9 +178,15 @@ function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
       </a>
       {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
       {mode === "register" && (
-        <p className="acct-muted" style={{ marginTop: 10, fontSize: 12 }}>
-          Verification emails come from budgetsmart.techmyriademporium@gmail.com — if it doesn't arrive in a minute, check your spam/junk folder.
-        </p>
+        <>
+          <p className="acct-muted" style={{ marginTop: 10, fontSize: 12 }}>
+            By creating an account you agree to our <a className="acct-accent" href="/terms">Terms of Service</a> and{" "}
+            <a className="acct-accent" href="/privacy">Privacy Policy</a>.
+          </p>
+          <p className="acct-muted" style={{ marginTop: 8, fontSize: 12 }}>
+            Verification emails come from budgetsmart.techmyriademporium@gmail.com — if it doesn't arrive in a minute, check your spam/junk folder.
+          </p>
+        </>
       )}
     </div>
   );
@@ -347,7 +353,7 @@ function SecuritySettings({ account, onChange }: { account: Account; onChange: (
 
 interface FamilyMember { id: string; name: string; email: string; role: string; joinedAt: string; avatarUrl: string | null }
 interface FamilyInvite { id: string; to_email: string; created_at: string }
-interface Family { id: string; ownerId: string; members: FamilyMember[]; invites: FamilyInvite[]; seatsLeft: number }
+interface Family { id: string; ownerId: string; members: FamilyMember[]; invites: FamilyInvite[]; seatsLeft: number; seatLimit: number }
 
 function FamilyCard({ account, onChange }: { account: Account; onChange: () => void }) {
   const { t } = useI18n();
@@ -388,13 +394,13 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
   }
 
   if (canOwn === null) return null; // still loading
-  if (!fam && !canOwn) return null; // no family plan and not in one — nothing to show
+  if (!fam && !canOwn) return null; // no shareable plan and not in one — nothing to show
   const isOwner = fam ? fam.ownerId === account.id : true;
 
   return (
     <div className="acct-card">
       <div className="acct-row">
-        <div className="acct-muted">{t("acct.family")} {fam && <span className="acct-badge on">{fam.members.length}/5</span>}</div>
+        <div className="acct-muted">Sharing {fam && <span className="acct-badge on">{fam.members.length}/{fam.seatLimit}</span>}</div>
         {fam && !isOwner && <button className="btn acct-ghost" onClick={leave} disabled={busy}>{t("acct.leave")}</button>}
       </div>
 
@@ -423,18 +429,52 @@ function FamilyCard({ account, onChange }: { account: Account; onChange: () => v
 
       {isOwner && (!fam || fam.seatsLeft > 0) && (
         <div className="acct-invite-row">
-          <input className="acct-input" type="email" placeholder="family.member@email.com" value={email}
+          <input className="acct-input" type="email" placeholder="teammate@email.com" value={email}
             onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invite()} />
           <button className="btn btn-primary" onClick={invite} disabled={busy || !email}>{busy ? "…" : t("acct.invite")}</button>
         </div>
       )}
       {isOwner ? (
         <p className="acct-muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Your plan covers 5 people including you. Invites come from budgetsmart.techmyriademporium@gmail.com and expire in 14 days.
+          Your plan covers {fam ? fam.seatLimit : 5} people including you. Share it by email — invites come from
+          budgetsmart.techmyriademporium@gmail.com and expire in 14 days. Everyone you add unlocks all your plan's features at no extra cost.
         </p>
       ) : fam && (
-        <p className="acct-muted" style={{ fontSize: 12, marginTop: 8 }}>You share this family's plan. The owner manages members.</p>
+        <p className="acct-muted" style={{ fontSize: 12, marginTop: 8 }}>You share this plan. The owner manages members.</p>
       )}
+      {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
+/** Redeem a code — unlocks a Custom/Enterprise/gift plan on this account. */
+function RedeemCard({ onChange }: { onChange: () => void }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function redeem() {
+    setBusy(true); setMsg(null);
+    const r = await api("/codes/redeem", { method: "POST", body: JSON.stringify({ code }) });
+    setBusy(false);
+    if (r.ok) {
+      setCode("");
+      setMsg({ kind: "ok", text: "🎉 Code redeemed — your plan is unlocked. Reload the app to sync; share seats by email under Sharing." });
+      onChange();
+    } else setMsg({ kind: "err", text: r.data.error ?? "Couldn't redeem that code." });
+  }
+
+  return (
+    <div className="acct-card">
+      <div className="acct-muted" style={{ marginBottom: 10 }}>Redeem a code</div>
+      <p className="acct-muted" style={{ fontSize: 13, marginBottom: 10 }}>
+        Bought a Custom, Enterprise or gift plan? Paste your code to unlock it on this account — then share seats with your team by email.
+      </p>
+      <div className="acct-invite-row">
+        <input className="acct-input" placeholder="BSMART-XXXX-XXXX" value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && redeem()} />
+        <button className="btn btn-primary" onClick={redeem} disabled={busy || code.trim().length < 6}>{busy ? "…" : "Redeem"}</button>
+      </div>
       {msg && <p className={`acct-msg ${msg.kind}`}>{msg.text}</p>}
     </div>
   );
@@ -543,6 +583,7 @@ function AccountView({ account, onChange }: { account: Account; onChange: () => 
       </div>
 
       <TrialCard account={account} onChange={onChange} />
+      <RedeemCard onChange={onChange} />
       <ProfileEditor account={account} onChange={onChange} />
       <SecuritySettings account={account} onChange={onChange} />
       <FamilyCard account={account} onChange={onChange} />

@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { useEntitlements } from "../lib/hooks";
+import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { APP_VERSION, APP_VERSION_LABEL, compareVersions } from "@budgetsmart/shared";
 
 const VERSION_URL = "https://budgetsmart-api.budgetsmart.workers.dev/version";
@@ -29,11 +30,39 @@ function VersionFooter() {
   );
 }
 
+/** System / Light / Dark appearance control. */
+function ThemeSwitch() {
+  const [pref, setPref] = useState<ThemePref>(() => getThemePref());
+  const pick = (p: ThemePref) => { setThemePref(p); setPref(p); };
+  const options: Array<{ v: ThemePref; label: string; title: string }> = [
+    { v: "system", label: "Auto", title: "Follow your system setting" },
+    { v: "light", label: "☀", title: "Light" },
+    { v: "dark", label: "☾", title: "Dark" },
+  ];
+  return (
+    <div className="seg" role="radiogroup" aria-label="Appearance">
+      {options.map((o) => (
+        <button
+          key={o.v}
+          className={`seg-btn ${pref === o.v ? "on" : ""}`}
+          onClick={() => pick(o.v)}
+          title={o.title}
+          role="radio"
+          aria-checked={pref === o.v}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface NavItem { to: string; label: string; icon: string; end?: boolean; feature?: string }
 
 /** Default order (customizable by the user — stored locally). */
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "▦", end: true },
+  { to: "/master", label: "Master", icon: "◈", feature: "family" },
   { to: "/calendar", label: "Calendar", icon: "▧", feature: "recurring" },
   { to: "/accounts", label: "Accounts", icon: "▤" },
   { to: "/insights", label: "Insights", icon: "✦", feature: "insights" },
@@ -51,6 +80,7 @@ const NAV: NavItem[] = [
   { to: "/intelligence", label: "Intelligence", icon: "⚡", feature: "intelligence" },
   { to: "/rewards", label: "Rewards", icon: "★", feature: "gamification" },
   { to: "/plans", label: "Plans", icon: "◇" },
+  { to: "/settings", label: "Settings", icon: "⚙" },
 ];
 
 const NAV_ORDER_KEY = "bs_nav_order";
@@ -70,6 +100,7 @@ function orderedNav(saved: string[] | null): NavItem[] {
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Your money at a glance" },
+  "/master": { title: "Master", subtitle: "Everything everyone has — one view" },
   "/transactions": { title: "Transactions", subtitle: "Every dollar, tracked" },
   "/import": { title: "Import", subtitle: "Bring in bank statements — auto-tagged, deduped" },
   "/budgets": { title: "Budgets", subtitle: "Plan and pace your spending" },
@@ -86,7 +117,8 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/reports": { title: "Reports", subtitle: "Trends, cashflow, and exports" },
   "/rewards": { title: "Rewards", subtitle: "Level up your money game" },
   "/accounts": { title: "Accounts", subtitle: "Balances across every account" },
-  "/plans": { title: "Plans & Family", subtitle: "Pick a tier, manage your family" },
+  "/plans": { title: "Plans & Sharing", subtitle: "Your plan, your people, your emails" },
+  "/settings": { title: "Settings", subtitle: "Make BudgetSmart feel like yours" },
 };
 
 export function AppShell() {
@@ -137,7 +169,7 @@ export function AppShell() {
           <img src="/brand.png" alt="BudgetSmart" style={{ height: 40, width: "auto", display: "block" }} />
         </div>
 
-        <nav className="col gap-sm">
+        <nav className="col gap-sm sidebar-nav">
           {nav.map((item, i) => {
             const locked = item.feature ? !has(item.feature) : false;
             return (
@@ -145,6 +177,7 @@ export function AppShell() {
                 <NavLink
                   to={item.to}
                   end={item.end}
+                  data-tour={item.to}
                   className={({ isActive }) => `nav-item ${isActive ? "active" : ""} ${locked ? "nav-locked" : ""}`}
                   style={{ flex: 1, minWidth: 0 }}
                   title={locked ? `${item.label} — upgrade to unlock` : item.label}
@@ -175,14 +208,14 @@ export function AppShell() {
         <div className="sidebar-footer">
           <VersionFooter />
           <div className="row between">
-            <div className="col" style={{ minWidth: 0 }}>
+            <NavLink to="/settings" className="col" style={{ minWidth: 0 }} title="Your settings — profile, theme, emails, data">
               <span className="text-sm truncate" style={{ maxWidth: 150 }}>
                 {user?.name}
               </span>
               <span className="faint text-xs truncate" style={{ maxWidth: 150 }}>
                 {user?.email}
               </span>
-            </div>
+            </NavLink>
             <button className="btn btn-ghost btn-sm" onClick={logout} title="Sign out">
               ⏻
             </button>
@@ -196,7 +229,10 @@ export function AppShell() {
             <h1>{meta.title}</h1>
             <div className="subtitle">{meta.subtitle}</div>
           </div>
-          <span className="chip">{user?.currency ?? "USD"}</span>
+          <div className="row gap-sm">
+            <ThemeSwitch />
+            <span className="chip">{user?.currency ?? "USD"}</span>
+          </div>
         </header>
         <Outlet />
       </main>

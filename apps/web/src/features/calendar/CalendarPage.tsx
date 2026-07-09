@@ -1,7 +1,8 @@
-import { formatMoney, type ForecastSummary, type GoalsSummary, type RecurringSummary } from "@budgetsmart/shared";
+import { formatMoney, type ForecastSummary, type GoalsSummary, type RecurringSummary, type ScheduledCharge } from "@budgetsmart/shared";
 import { useState } from "react";
 import { EmptyState, Money, Spinner } from "../../components/ui";
-import { useEntitlements, useForecast, useGoals, useRecurring } from "../../lib/hooks";
+import { useEntitlements, useForecast, useGoals, useRecurring, useSchedule } from "../../lib/hooks";
+import { ScheduleManager } from "./ScheduleManager";
 
 interface CalEvent {
   kind: "bill" | "income" | "goal";
@@ -19,6 +20,7 @@ function collectEvents(
   recurring: RecurringSummary | undefined,
   forecast: ForecastSummary | undefined,
   goals: GoalsSummary | undefined,
+  scheduled: ScheduledCharge[] | undefined,
 ): Map<string, CalEvent[]> {
   const events = new Map<string, CalEvent[]>();
   const push = (date: string, e: CalEvent) => (events.get(date) ?? events.set(date, []).get(date)!).push(e);
@@ -56,6 +58,39 @@ function collectEvents(
     }
   }
 
+  // user-scheduled charges: roll each schedule across the visible month
+  for (const s of scheduled ?? []) {
+    if (!s.active) continue;
+    const kind = s.direction === "income" ? ("income" as const) : ("bill" as const);
+    const push2 = (dateIso: string) => {
+      if (s.endDate && dateIso > s.endDate) return;
+      push(dateIso, { kind, icon: s.icon, label: s.name, amount: s.amount });
+    };
+    if (s.type === "once") {
+      const ms = Date.parse(s.nextDate + "T00:00:00Z");
+      if (ms >= first && ms < nextMonth) push2(s.nextDate);
+      continue;
+    }
+    const stepDays = s.type === "custom"
+      ? Math.max(1, s.intervalDays ?? 30)
+      : s.cadence === "weekly" ? 7 : s.cadence === "biweekly" ? 14 : s.cadence === "monthly" ? 30 : 365;
+    let ms = Date.parse(s.nextDate + "T00:00:00Z");
+    while (ms - stepDays * DAY >= first) ms -= stepDays * DAY;
+    let guard = 0;
+    while (ms < nextMonth && guard++ < 62) {
+      if (ms >= first) push2(iso(ms));
+      if (s.type === "recurring" && s.cadence === "monthly") {
+        const d = new Date(ms);
+        ms = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+      } else if (s.type === "recurring" && s.cadence === "yearly") {
+        const d = new Date(ms);
+        ms = Date.UTC(d.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate());
+      } else {
+        ms += stepDays * DAY;
+      }
+    }
+  }
+
   // goal completion dates
   for (const g of goals?.goals ?? []) {
     const d = g.computed.projectedDate;
@@ -73,6 +108,7 @@ export function CalendarPage() {
   const recurringQ = useRecurring();
   const forecastQ = useForecast();
   const goalsQ = useGoals();
+  const scheduleQ = useSchedule();
   const [offset, setOffset] = useState(0);
 
   const now = new Date();
@@ -88,7 +124,7 @@ export function CalendarPage() {
     return <div className="page"><Spinner label="Building your calendar…" /></div>;
   }
 
-  const events = collectEvents(monthStart, recurringQ.data?.summary, has("forecast") ? forecastQ.data : undefined, goalsQ.data);
+  const events = collectEvents(monthStart, recurringQ.data?.summary, has("forecast") ? forecastQ.data : undefined, goalsQ.data, scheduleQ.data);
   const monthTotal = [...events.values()].flat().filter((e) => e.kind === "bill").reduce((s, e) => s + (e.amount ?? 0), 0);
   const monthIncome = [...events.values()].flat().filter((e) => e.kind === "income").reduce((s, e) => s + (e.amount ?? 0), 0);
 
@@ -143,12 +179,14 @@ export function CalendarPage() {
             ),
           )}
         </div>
-        {(recurringQ.data?.summary.items.length ?? 0) === 0 && (
+        {(recurringQ.data?.summary.items.length ?? 0) === 0 && (scheduleQ.data?.length ?? 0) === 0 && (
           <div style={{ padding: 20 }}>
-            <EmptyState icon="🗓" title="Nothing scheduled yet" hint="Add a few months of transactions and your bills, paychecks and goal dates will appear here automatically." />
+            <EmptyState icon="🗓" title="Nothing scheduled yet" hint="Schedule a charge below, or add a few months of transactions and your bills and paychecks will appear here automatically." />
           </div>
         )}
       </div>
+
+      <ScheduleManager />
     </div>
   );
 }

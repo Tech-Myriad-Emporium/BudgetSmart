@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DebtStrategy } from "@budgetsmart/shared";
+import type { DebtStrategy, ScheduledChargeInput } from "@budgetsmart/shared";
 import {
   api,
   type DebtInput,
@@ -163,7 +163,12 @@ export const useIntelligence = (match?: { salary: number; contribPct: number; ma
   });
 
 export const useNetWorth = () =>
-  useQuery({ queryKey: ["networth"], queryFn: () => api.netWorth().then((r) => r.detail) });
+  useQuery({
+    queryKey: ["networth"],
+    queryFn: () => api.netWorth().then((r) => r.detail),
+    // holding prices sync in the background — keep on-screen numbers live
+    refetchInterval: 120_000,
+  });
 
 export const useGamification = () =>
   useQuery({ queryKey: ["gamification"], queryFn: () => api.gamification().then((r) => r.state) });
@@ -270,27 +275,8 @@ export function useFamilyGoalContribution() {
   });
 }
 
-export const useFamilyChores = (enabled: boolean) =>
-  useQuery({ queryKey: ["family-chores"], queryFn: () => api.familyChores().then((r) => r.chores), enabled });
-
 export const useFamilyRequests = (enabled: boolean) =>
   useQuery({ queryKey: ["family-requests"], queryFn: () => api.familyRequests().then((r) => r.requests), enabled });
-
-export function useChoreMutations() {
-  const qc = useQueryClient();
-  const invalidate = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: ["family-chores"] }),
-      qc.invalidateQueries({ queryKey: ["family"] }),
-    ]);
-  const add = useMutation({
-    mutationFn: (input: { memberId: string; name: string; reward: number; repeats: boolean }) => api.addChore(input),
-    onSuccess: invalidate,
-  });
-  const complete = useMutation({ mutationFn: (id: string) => api.completeChore(id), onSuccess: invalidate });
-  const remove = useMutation({ mutationFn: (id: string) => api.removeChore(id), onSuccess: invalidate });
-  return { add, complete, remove };
-}
 
 export function useRequestMutations() {
   const qc = useQueryClient();
@@ -312,7 +298,12 @@ export function useRequestMutations() {
 }
 
 export const usePortfolio = () =>
-  useQuery({ queryKey: ["portfolio"], queryFn: () => api.investments().then((r) => r.portfolio) });
+  useQuery({
+    queryKey: ["portfolio"],
+    queryFn: () => api.investments().then((r) => r.portfolio),
+    // holding prices sync in the background — keep on-screen numbers live
+    refetchInterval: 120_000,
+  });
 
 export const useProjection = (monthly: number, returnPct: number, years: number) =>
   useQuery({
@@ -334,6 +325,27 @@ export function useHoldingMutations() {
     onSuccess: invalidate,
   });
   const remove = useMutation({ mutationFn: (id: string) => api.deleteHolding(id), onSuccess: invalidate });
+  return { create, update, remove };
+}
+
+export const useSchedule = () =>
+  useQuery({ queryKey: ["schedule"], queryFn: () => api.schedule().then((r) => r.charges) });
+
+export function useScheduleMutations() {
+  const qc = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ["schedule"] }),
+      // an already-due charge auto-posts a transaction immediately
+      qc.invalidateQueries({ queryKey: ["transactions"] }),
+      qc.invalidateQueries({ queryKey: ["dashboard"] }),
+    ]);
+  const create = useMutation({ mutationFn: (input: ScheduledChargeInput) => api.createScheduledCharge(input), onSuccess: invalidate });
+  const update = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<ScheduledChargeInput> }) => api.updateScheduledCharge(id, input),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteScheduledCharge(id), onSuccess: invalidate });
   return { create, update, remove };
 }
 

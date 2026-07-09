@@ -226,25 +226,6 @@ export function IntelligencePage() {
             )}
           </div>
 
-          {/* life modeling */}
-          <div className="card">
-            <span className="card-title">🧭 Life-event impact</span>
-            <p className="faint text-xs" style={{ margin: "8px 0 4px" }}>
-              Your current monthly net is <b className={data.monthlyNet < 0 ? "danger" : "accent"}>{formatMoney(data.monthlyNet)}</b>. After…
-            </p>
-            <div className="col">
-              {data.life.map((l) => (
-                <div className="row between" key={l.key} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div className="col" style={{ minWidth: 0 }}>
-                    <span className="text-sm">{l.icon} {l.title}</span>
-                    <span className="faint text-xs">{l.note}</span>
-                  </div>
-                  <span className={`text-sm ${l.newMonthlyNet < 0 ? "danger" : "accent"}`}>{formatMoney(l.newMonthlyNet)}/mo</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* opportunity cost */}
           <div className="card">
             <span className="card-title">⚖️ Opportunity cost of $100/mo</span>

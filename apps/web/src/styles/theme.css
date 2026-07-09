@@ -1,6 +1,9 @@
 /* ============================================================== *
- * BudgetSmart — black / white / neon-green design system
- * Mirrors @budgetsmart/shared design tokens as CSS variables.
+ * BudgetSmart design system.
+ * Dark (default): black / white / neon-green terminal look.
+ * Light: same structure on paper-white with a deep green accent.
+ * The active theme is set as <html data-theme="dark|light"> from the
+ * user's preference (system / light / dark) — see lib/theme.ts.
  * ============================================================== */
 
 :root {
@@ -12,12 +15,30 @@
   --fg-faint: #5a5a5a;
   --accent: #00ff41;
   --accent-dim: #00b82f;
-  --accent-glow: rgba(0, 255, 65, 0.35);
+  --accent-glow: rgba(0, 255, 65, 0.22);
   --border: #1c1c1c;
   --border-accent: #00ff41;
   --error: #ff0033;
   --warning: #ffd600;
   --success: #00ff41;
+
+  /* surfaces that were previously hardcoded */
+  --on-accent: #000000;
+  --input-bg: #000000;
+  --track: #161616;
+  --track-hover: #222222;
+  --overlay: rgba(0, 0, 0, 0.72);
+  --overlay-strong: rgba(0, 0, 0, 0.96);
+  --topbar-bg: rgba(0, 0, 0, 0.85);
+  --accent-wash: rgba(0, 255, 65, 0.06);
+  --accent-wash-strong: rgba(0, 255, 65, 0.12);
+
+  /* calendar event tints */
+  --bill-border: #3a2a2a;
+  --bill-fg: #e0a0a0;
+  --income-border: #1f3a26;
+  --goal-border: #3a3a1f;
+  --goal-fg: #ffd600;
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -32,7 +53,45 @@
   --t-base: 180ms;
 
   --shadow-glow: 0 0 12px var(--accent-glow);
-  --shadow-glow-strong: 0 0 24px rgba(0, 255, 65, 0.5);
+  --shadow-glow-strong: 0 0 24px rgba(0, 255, 65, 0.32);
+}
+
+/* Light theme — professional, low-glare. The neon green becomes a deep
+ * confident green (readable on white); glows become soft neutral shadows. */
+:root[data-theme="light"] {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --surface-alt: #eef1f2;
+  --fg: #14181c;
+  --fg-muted: #4c5560;
+  --fg-faint: #8a939b;
+  --accent: #007a2f;
+  --accent-dim: #006025;
+  --accent-glow: rgba(0, 122, 47, 0.15);
+  --border: #e0e5e8;
+  --border-accent: #0d9c47;
+  --error: #cf0e34;
+  --warning: #96700c;
+  --success: #007a2f;
+
+  --on-accent: #ffffff;
+  --input-bg: #ffffff;
+  --track: #e3e7ea;
+  --track-hover: #d2d8dc;
+  --overlay: rgba(20, 26, 32, 0.42);
+  --overlay-strong: rgba(245, 246, 247, 0.97);
+  --topbar-bg: rgba(245, 246, 247, 0.88);
+  --accent-wash: rgba(0, 122, 47, 0.07);
+  --accent-wash-strong: rgba(0, 122, 47, 0.13);
+
+  --bill-border: #eccaca;
+  --bill-fg: #a13a3a;
+  --income-border: #bfe0c8;
+  --goal-border: #e4d8a6;
+  --goal-fg: #7d6407;
+
+  --shadow-glow: 0 1px 3px rgba(16, 24, 32, 0.1), 0 4px 14px rgba(16, 24, 32, 0.06);
+  --shadow-glow-strong: 0 6px 24px rgba(16, 24, 32, 0.14);
 }
 
 /* ---------- reset ---------- */
@@ -55,10 +114,34 @@ body {
   color: var(--fg);
   font-family: var(--font-sans);
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.45;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, .stat, .stat-xl, .stat-lg {
+  line-height: 1.15;
+}
+
+/* keyboard focus is always visible — trust cue for a finance app */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* colors settle smoothly when the theme changes */
+body,
+.card,
+.sidebar,
+.topbar,
+.btn,
+.input,
+.select {
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--t-base);
+  transition-timing-function: var(--ease);
 }
 
 a {
@@ -73,7 +156,7 @@ button {
 
 ::selection {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
 }
 
 /* numbers use tabular figures everywhere */
@@ -93,11 +176,11 @@ button {
   background: var(--bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: #161616;
+  background: var(--track);
   border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #222;
+  background: var(--track-hover);
 }
 
 /* ============================================================== *
@@ -120,6 +203,25 @@ button {
   flex-direction: column;
   padding: 20px 14px;
   gap: 4px;
+}
+
+/* The tab list scrolls on its own; brand stays on top, footer stays pinned.
+ * Without this, screens shorter than the tab list simply cut off the bottom
+ * tabs with no way to reach them. */
+.sidebar-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: var(--track);
+  border-radius: var(--radius-pill);
 }
 
 .brand {
@@ -199,7 +301,7 @@ button {
   gap: 16px;
   padding: 18px 28px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--topbar-bg);
   backdrop-filter: blur(8px);
 }
 .topbar h1 {
@@ -367,11 +469,11 @@ button {
 .btn-primary {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(0, 255, 65, 0.06);
+  background: var(--accent-wash);
 }
 .btn-primary:hover {
   box-shadow: var(--shadow-glow);
-  background: rgba(0, 255, 65, 0.12);
+  background: var(--accent-wash-strong);
 }
 .btn-ghost {
   background: transparent;
@@ -406,7 +508,7 @@ button {
 .select,
 textarea.input {
   width: 100%;
-  background: #000;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--fg);
@@ -460,6 +562,37 @@ textarea.input:focus {
   padding-left: 26px;
 }
 
+/* ---------- segmented control ---------- */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.seg-btn:hover {
+  color: var(--fg);
+}
+.seg-btn.on {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 /* ---------- badges / pills ---------- */
 .badge {
   display: inline-flex;
@@ -507,7 +640,7 @@ textarea.input:focus {
 .progress {
   height: 6px;
   border-radius: var(--radius-pill);
-  background: #161616;
+  background: var(--track);
   overflow: hidden;
 }
 .progress > span {
@@ -558,7 +691,7 @@ textarea.input:focus {
   place-items: center;
   font-size: 16px;
   border: 1px solid var(--border);
-  background: #000;
+  background: var(--input-bg);
   flex: none;
 }
 .amount-pos {
@@ -572,7 +705,7 @@ textarea.input:focus {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--overlay);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -610,7 +743,7 @@ textarea.input:focus {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(900px 500px at 50% -10%, rgba(0, 255, 65, 0.07), transparent 70%),
+    radial-gradient(900px 500px at 50% -10%, var(--accent-wash), transparent 70%),
     var(--bg);
 }
 .auth-card {
@@ -635,7 +768,7 @@ textarea.input:focus {
   font-size: 13px;
 }
 .skeleton {
-  background: linear-gradient(90deg, #0a0a0a, #141414, #0a0a0a);
+  background: linear-gradient(90deg, var(--surface), var(--surface-alt), var(--surface));
   background-size: 200% 100%;
   animation: shimmer 1.2s var(--ease) infinite;
   border-radius: var(--radius-md);
@@ -645,7 +778,7 @@ textarea.input:focus {
 .ring {
   width: 18px;
   height: 18px;
-  border: 2px solid #1c1c1c;
+  border: 2px solid var(--track);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -698,7 +831,7 @@ textarea.input:focus {
   font-family: var(--font-mono);
   font-size: 28px;
   font-weight: 600;
-  color: #000;
+  color: var(--on-accent);
   background: var(--accent);
   box-shadow: var(--shadow-glow-strong);
   flex: none;
@@ -716,7 +849,7 @@ textarea.input:focus {
   padding: 16px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #000;
+  background: var(--input-bg);
   transition:
     border-color var(--t-base) var(--ease),
     box-shadow var(--t-base) var(--ease),
@@ -765,7 +898,25 @@ textarea.input:focus {
     border-top: 1px solid var(--border);
     padding: 8px;
     z-index: 50;
+    overflow: hidden;
+  }
+  /* the tab strip itself scrolls sideways — smooth, contained, no cut-off tabs */
+  .sidebar-nav {
+    flex-direction: row;
+    align-items: center;
+    overflow-y: hidden;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    padding-right: 0;
+    padding-bottom: 2px;
+  }
+  .sidebar-nav > .row {
+    flex: none;
+  }
+  .nav-item {
+    flex: none;
+    padding: 10px;
   }
   .brand,
   .sidebar-footer {
@@ -785,13 +936,13 @@ textarea.input:focus {
 .cal-dow { text-align: center; font-size: 11px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 0; }
 .cal-cell { min-height: 86px; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: var(--surface); overflow: hidden; }
 .cal-cell.empty { border: none; background: transparent; }
-.cal-cell.today { border-color: var(--accent); box-shadow: 0 0 8px rgba(0, 255, 65, 0.2); }
+.cal-cell.today { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .cal-day { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); }
 .cal-events { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
 .cal-event { display: flex; align-items: center; gap: 4px; font-size: 10.5px; line-height: 1.3; border-radius: 4px; padding: 2px 5px; border: 1px solid var(--border); overflow: hidden; white-space: nowrap; }
-.cal-event.bill { border-color: #3a2a2a; color: #e0a0a0; }
-.cal-event.income { border-color: #1f3a26; color: var(--accent); }
-.cal-event.goal { border-color: #3a3a1f; color: #ffd600; }
+.cal-event.bill { border-color: var(--bill-border); color: var(--bill-fg); }
+.cal-event.income { border-color: var(--income-border); color: var(--accent); }
+.cal-event.goal { border-color: var(--goal-border); color: var(--goal-fg); }
 .cal-event-label { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .cal-event-amt { font-family: var(--font-mono); }
 @media (max-width: 720px) { .cal-cell { min-height: 64px; } .cal-event-label { display: none; } }
@@ -802,15 +953,80 @@ textarea.input:focus {
 .nav-move:disabled { opacity: 0.3; cursor: default; }
 
 
+/* ---------- guided onboarding (shadowed spotlight) ---------- */
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--overlay);
+  backdrop-filter: blur(1.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+/* bright window punched through the shadow, hugging the tab we're explaining */
+.guide-spotlight {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.45),
+    0 0 18px var(--accent-glow);
+  pointer-events: none;
+  transition: all var(--t-base) var(--ease);
+}
+.guide-card {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+}
+
+/* level-up celebration */
+.levelup-badge {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 6px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--on-accent);
+  background: var(--accent);
+  animation: levelup-pop 0.9s var(--ease);
+  box-shadow: var(--shadow-glow-strong);
+}
+.levelup-float {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  animation: levelup-rise 1.4s var(--ease);
+  margin-bottom: 10px;
+}
+@keyframes levelup-pop {
+  0% { transform: scale(0.2) rotate(-8deg); opacity: 0; }
+  55% { transform: scale(1.18) rotate(3deg); }
+  75% { transform: scale(0.95); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes levelup-rise {
+  0% { transform: translateY(14px); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
 /* ---------- onboarding tour (blocking) ---------- */
 .tour-overlay {
-  position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.96);
+  position: fixed; inset: 0; z-index: 1000; background: var(--overlay-strong);
   display: flex; align-items: center; justify-content: center; padding: 24px;
 }
 .tour-card {
   max-width: 480px; width: 100%; text-align: center; border: 1px solid var(--accent);
   border-radius: 14px; background: var(--surface); padding: 36px 32px;
-  box-shadow: 0 0 40px rgba(0, 255, 65, 0.25);
+  box-shadow: var(--shadow-glow-strong);
 }
 .tour-card img { margin-left: auto; margin-right: auto; display: block; }
 .tour-icon { font-size: 40px; margin-bottom: 10px; }

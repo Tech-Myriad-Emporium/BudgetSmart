@@ -79,6 +79,25 @@ export interface RecurringOverrideRow {
   createdAt: string;
 }
 
+export interface ScheduledChargeRow {
+  id: string;
+  userId: string;
+  name: string;
+  icon: string;
+  amount: number;
+  direction: string; // expense | income
+  type: string; // recurring | once | custom
+  cadence: string | null; // weekly | biweekly | monthly | yearly
+  intervalDays: number | null;
+  nextDate: string; // YYYY-MM-DD
+  endDate: string | null;
+  categoryId: string | null;
+  accountId: string | null;
+  autoPost: number;
+  active: number;
+  createdAt: string;
+}
+
 export interface AccountRow {
   id: string;
   userId: string;

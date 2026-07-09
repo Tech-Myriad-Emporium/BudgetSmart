@@ -11,6 +11,7 @@ import type {
   FamilyRequestRow,
   GoalRow,
   RecurringOverrideRow,
+  ScheduledChargeRow,
   HoldingRow,
   TransactionRow,
   UserRow,
@@ -100,6 +101,44 @@ export const recurringOverrides = {
   },
   remove(userId: string, key: string): void {
     db.prepare("DELETE FROM recurring_overrides WHERE userId = ? AND key = ?").run(userId, key);
+  },
+};
+
+/* ------------------------------------------------------------------ *
+ * Scheduled charges (user-defined: recurring / once / custom interval)
+ * ------------------------------------------------------------------ */
+export const scheduledCharges = {
+  list(userId: string): ScheduledChargeRow[] {
+    return rows<ScheduledChargeRow>(
+      db.prepare("SELECT * FROM scheduled_charges WHERE userId = ? ORDER BY nextDate, name").all(userId),
+    );
+  },
+  listAllActive(): ScheduledChargeRow[] {
+    return rows<ScheduledChargeRow>(db.prepare("SELECT * FROM scheduled_charges WHERE active = 1").all());
+  },
+  findForUser(userId: string, id: string): ScheduledChargeRow | undefined {
+    return row<ScheduledChargeRow>(
+      db.prepare("SELECT * FROM scheduled_charges WHERE id = ? AND userId = ?").get(id, userId),
+    );
+  },
+  create(input: Omit<ScheduledChargeRow, "id" | "createdAt">): ScheduledChargeRow {
+    const r: ScheduledChargeRow = { ...input, id: newId(), createdAt: nowIso() };
+    db.prepare(
+      `INSERT INTO scheduled_charges
+        (id,userId,name,icon,amount,direction,type,cadence,intervalDays,nextDate,endDate,categoryId,accountId,autoPost,active,createdAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      r.id, r.userId, r.name, r.icon, r.amount, r.direction, r.type, p(r.cadence), p(r.intervalDays),
+      r.nextDate, p(r.endDate), p(r.categoryId), p(r.accountId), r.autoPost, r.active, r.createdAt,
+    );
+    return r;
+  },
+  update(id: string, patch: Partial<Omit<ScheduledChargeRow, "id" | "userId" | "createdAt">>): ScheduledChargeRow {
+    applyUpdate("scheduled_charges", id, patch);
+    return row<ScheduledChargeRow>(db.prepare("SELECT * FROM scheduled_charges WHERE id = ?").get(id))!;
+  },
+  remove(id: string): void {
+    db.prepare("DELETE FROM scheduled_charges WHERE id = ?").run(id);
   },
 };
 
