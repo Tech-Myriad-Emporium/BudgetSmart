@@ -227,6 +227,29 @@ CREATE TABLE IF NOT EXISTS recurring_overrides (
   PRIMARY KEY (userId, key)
 );
 
+-- User-defined scheduled charges: recurring, one-time ("once") or custom
+-- interval, pinned to exact dates. They show on the calendar and forecast,
+-- and (optionally) auto-post as real transactions when their date arrives.
+CREATE TABLE IF NOT EXISTS scheduled_charges (
+  id           TEXT PRIMARY KEY,
+  userId       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  icon         TEXT NOT NULL DEFAULT '📌',
+  amount       INTEGER NOT NULL,                 -- cents, positive
+  direction    TEXT NOT NULL DEFAULT 'expense',  -- expense | income
+  type         TEXT NOT NULL,                    -- recurring | once | custom
+  cadence      TEXT,                             -- weekly|biweekly|monthly|yearly (recurring)
+  intervalDays INTEGER,                          -- every N days (custom)
+  nextDate     TEXT NOT NULL,                    -- YYYY-MM-DD of the next occurrence
+  endDate      TEXT,                             -- optional stop date
+  categoryId   TEXT,
+  accountId    TEXT,
+  autoPost     INTEGER NOT NULL DEFAULT 0,       -- 1 = create the transaction when due
+  active       INTEGER NOT NULL DEFAULT 1,
+  createdAt    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sched_user ON scheduled_charges(userId, nextDate);
+
 -- Append-only audit trail: every successful mutating API action.
 CREATE TABLE IF NOT EXISTS audit_log (
   id        TEXT PRIMARY KEY,

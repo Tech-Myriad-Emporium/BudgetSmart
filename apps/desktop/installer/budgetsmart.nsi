@@ -7,7 +7,7 @@ Unicode true
 !include "MUI2.nsh"
 
 !define APPNAME    "BudgetSmart"
-!define APPVERSION "1.2.3"
+!define APPVERSION "1.3.0"
 !define PUBLISHER  "BudgetSmart"
 !define SRCDIR     "${__FILEDIR__}\..\dist-exe\BudgetSmart-win32-x64"
 !define ARP        "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
@@ -26,6 +26,11 @@ SetCompressor /SOLID lzma
 !define MUI_FINISHPAGE_RUN_TEXT "Launch BudgetSmart"
 
 !insertmacro MUI_PAGE_WELCOME
+; Legal gate: the full notice is shown upfront and install cannot continue
+; until the "I accept" box is checked — nobody can claim they weren't told.
+!define MUI_LICENSEPAGE_CHECKBOX
+!define MUI_LICENSEPAGE_CHECKBOX_TEXT "I have read the legal notice and accept the Terms of Service and Privacy Policy"
+!insertmacro MUI_PAGE_LICENSE "${__FILEDIR__}\legal.txt"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -44,6 +49,9 @@ Section "BudgetSmart (required)" SecMain
 
   ; --- the app + bundled prerequisites (Node runtime, Electron, web + backend) ---
   File /r "${SRCDIR}\*"
+
+  ; The accepted legal notice ships with the install for the user's records.
+  File /oname=LEGAL.txt "${__FILEDIR__}\legal.txt"
 
   ; Shortcuts
   CreateDirectory "$SMPROGRAMS\${APPNAME}"

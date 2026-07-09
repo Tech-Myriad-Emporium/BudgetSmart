@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { GuidedOnboarding } from "./components/GuidedOnboarding";
 import { FeatureGate } from "./components/FeatureGate";
 import { Spinner } from "./components/ui";
 import { AccountsPage } from "./features/accounts/AccountsPage";
@@ -17,9 +18,11 @@ import { ImportPage } from "./features/import/ImportPage";
 import { InsightsPage } from "./features/insights/InsightsPage";
 import { IntelligencePage } from "./features/intelligence/IntelligencePage";
 import { InvestmentsPage } from "./features/investments/InvestmentsPage";
+import { MasterPage } from "./features/master/MasterPage";
 import { NetWorthPage } from "./features/networth/NetWorthPage";
 import { RecurringPage } from "./features/recurring/RecurringPage";
 import { ReportsPage } from "./features/reports/ReportsPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 import { SubscriptionPage } from "./features/subscription/SubscriptionPage";
 import { TransactionsPage } from "./features/transactions/TransactionsPage";
 import { api } from "./lib/api";
@@ -56,60 +59,6 @@ function BootScreen() {
 }
 
 
-/* ------------------------------------------------------------------ *
- * Onboarding: a required first-run tour. Until it's completed, the app
- * renders ONLY this overlay — nothing else is clickable.
- * ------------------------------------------------------------------ */
-const TOUR_STEPS: Array<{ icon: string; title: string; body: string }> = [
-  { icon: "👋", title: "Welcome to BudgetSmart", body: "Your money, on your device. Everything you track stays local — this quick tour shows you how the app works. It takes about a minute." },
-  { icon: "▦", title: "The Dashboard", body: "Your home base: Safe-to-Spend tells you what you can spend right now without breaking anything, next to net worth, cashflow and your budgets at a glance." },
-  { icon: "⇄", title: "Transactions & Import", body: "Log spending by hand in seconds, or drop in a bank statement (CSV/OFX/QIF) on the Import tab — BudgetSmart auto-categorizes it from your own history and skips duplicates." },
-  { icon: "◫", title: "Budgets", body: "Set monthly limits per category (sub-categories too). Rollover carries what's left. The Insights tab will even suggest budgets from your real spending." },
-  { icon: "▧", title: "Calendar & Recurring", body: "Detected bills, paychecks and goal milestones land on the Calendar automatically. Mark anything \u201cnot recurring\u201d or track a merchant manually on the Recurring tab." },
-  { icon: "◎", title: "Goals & Debt", body: "Set savings goals with projected finish dates, plan debt payoff (snowball or avalanche), and watch the interest you save. Family plans can even share goals." },
-  { icon: "◇", title: "Plans & sync", body: "Connect the account you created on budgetsmarttme.com under Plans — your subscription unlocks features here, and your tabs are fully reorderable via ⚙ Customize. That's it, you're ready!" },
-];
-
-function OnboardingTour({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const s = TOUR_STEPS[step]!;
-  const last = step === TOUR_STEPS.length - 1;
-
-  async function finish() {
-    setBusy(true);
-    try { await api.completeOnboarding(); } catch { /* offline — let them in anyway */ }
-    onDone();
-  }
-
-  return (
-    <div className="tour-overlay">
-      <div className="tour-card">
-        <img src="/brand.png" alt="BudgetSmart" style={{ height: 36, width: "auto", marginBottom: 18 }} />
-        <div className="tour-icon">{s.icon}</div>
-        <h2 className="tour-title">{s.title}</h2>
-        <p className="tour-body">{s.body}</p>
-        <div className="tour-dots">
-          {TOUR_STEPS.map((_, i) => (
-            <span key={i} className={`tour-dot ${i === step ? "on" : i < step ? "done" : ""}`} />
-          ))}
-        </div>
-        <div className="row gap-sm" style={{ justifyContent: "center", marginTop: 18 }}>
-          {step > 0 && <button className="btn" onClick={() => setStep(step - 1)} disabled={busy}>‹ Back</button>}
-          {!last ? (
-            <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Next ›</button>
-          ) : (
-            <button className="btn btn-primary" onClick={finish} disabled={busy}>
-              {busy ? "…" : "Start using BudgetSmart →"}
-            </button>
-          )}
-        </div>
-        <div className="faint text-xs" style={{ marginTop: 14 }}>Step {step + 1} of {TOUR_STEPS.length}</div>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const { user, loading } = useAuth();
 
@@ -127,15 +76,16 @@ export default function App() {
     );
   }
 
-  // Required first-run tour — the ONLY thing rendered until completed.
-  if (!user.onboarded) {
-    return <OnboardingTour onDone={() => window.location.reload()} />;
-  }
-
   return (
-    <Routes>
-      <Route element={<AppShell />}>
+    <>
+      {/* Required first-run setup: a shadowed, guided walkthrough over the real
+          app. Everything underneath stays visible but unclickable until done;
+          finishing lands them on their freshly-unlocked Rewards page. */}
+      {!user.onboarded && <GuidedOnboarding onDone={() => { window.location.href = "/rewards"; }} />}
+      <Routes>
+        <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/master" element={<FeatureGate feature="family"><MasterPage /></FeatureGate>} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/recurring" element={<FeatureGate feature="recurring"><RecurringPage /></FeatureGate>} />
@@ -153,8 +103,10 @@ export default function App() {
         <Route path="/rewards" element={<FeatureGate feature="gamification"><GamificationPage /></FeatureGate>} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/plans" element={<SubscriptionPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

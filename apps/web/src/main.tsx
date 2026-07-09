@@ -5,7 +5,10 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { installOfflineBackend } from "./mobile";
+import { initTheme } from "./lib/theme";
 import "./styles/theme.css";
+
+initTheme(); // resolve system/light/dark before first paint
 
 const queryClient = new QueryClient({
   defaultOptions: {

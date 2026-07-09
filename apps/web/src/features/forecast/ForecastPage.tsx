@@ -1,4 +1,5 @@
 import { formatMoney } from "@budgetsmart/shared";
+import { Link } from "react-router-dom";
 import { EmptyState, Money, Spinner } from "../../components/ui";
 import { useForecast } from "../../lib/hooks";
 import { formatDateShort } from "../../lib/format";
@@ -7,10 +8,51 @@ export function ForecastPage() {
   const forecastQ = useForecast();
   const data = forecastQ.data;
 
-  if (forecastQ.isLoading || !data) {
+  if (forecastQ.isLoading) {
     return (
       <div className="page">
         <Spinner label="Projecting your cashflow…" />
+      </div>
+    );
+  }
+
+  // Never spin forever: a failed request gets a real message and a retry.
+  if (forecastQ.isError || !data) {
+    return (
+      <div className="page">
+        <div className="card">
+          <EmptyState
+            icon="◠"
+            title="Couldn't build your forecast"
+            hint={(forecastQ.error as Error | undefined)?.message ?? "Something went wrong loading your data."}
+          />
+          <div className="row" style={{ justifyContent: "center", paddingBottom: 16 }}>
+            <button className="btn btn-primary" onClick={() => forecastQ.refetch()}>Try again</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Brand-new data: nothing to project yet — say so instead of a dead flat line.
+  const noSignal =
+    data.startBalance === 0 && data.dailyDiscretionary === 0 && data.incomeStreams.length === 0 &&
+    data.points.every((p) => p.balance === data.startBalance);
+  if (noSignal) {
+    return (
+      <div className="page">
+        <div className="card">
+          <EmptyState
+            icon="◠"
+            title="Your forecast needs a little fuel"
+            hint="Add an account with a balance, then either import some transactions or schedule your bills and paychecks — the 90-day projection lights up from there."
+          />
+          <div className="row gap-sm" style={{ justifyContent: "center", paddingBottom: 16 }}>
+            <Link className="btn btn-primary" to="/accounts">Add an account</Link>
+            <Link className="btn" to="/calendar">Schedule charges</Link>
+            <Link className="btn" to="/import">Import a statement</Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -189,8 +231,8 @@ function ForecastChart({ points }: { points: Array<{ date: string; balance: numb
         <rect x={0} y={zeroY} width={W} height={H - zeroY} fill="rgba(255,60,60,0.08)" />
       )}
       <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeDasharray="4 4" />
-      <path d={`${path} L${x(points.length - 1)},${H - PAD} L${x(0)},${H - PAD} Z`} fill="rgba(0,255,65,0.07)" stroke="none" />
-      <path d={path} fill="none" stroke="#00FF41" strokeWidth={2} />
+      <path d={`${path} L${x(points.length - 1)},${H - PAD} L${x(0)},${H - PAD} Z`} style={{ fill: "var(--accent-wash)" }} stroke="none" />
+      <path d={path} fill="none" strokeWidth={2} style={{ stroke: "var(--accent)" }} />
     </svg>
   );
 }

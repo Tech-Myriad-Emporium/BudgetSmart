@@ -158,6 +158,13 @@ export function RegisterPage() {
           {busy ? <span className="ring" /> : "Create account →"}
         </button>
 
+        <p className="faint text-xs" style={{ textAlign: "center", lineHeight: 1.6, margin: 0 }}>
+          By creating an account you agree to our{" "}
+          <a className="accent" href="https://budgetsmarttme.com/terms" target="_blank" rel="noreferrer">Terms of Service</a>{" "}
+          and{" "}
+          <a className="accent" href="https://budgetsmarttme.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
+        </p>
+
         <div className="row" style={{ justifyContent: "center" }}>
           <span className="faint text-sm">
             Already have one?{" "}

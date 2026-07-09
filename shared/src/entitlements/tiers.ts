@@ -30,6 +30,7 @@ export const TIERS: Tier[] = [
       "Custom categories & tags",
       "Basic monthly totals",
       "Basic CSV export",
+      "Rewards, streaks & level-ups",
       "Offline mode",
       "Local-only data",
       "Biometric login",
@@ -106,7 +107,7 @@ export const TIERS: Tier[] = [
     tagline: "Replaces a tax advisor, debt strategist & planner — save $2,000–$10,000/yr.",
     highlights: [
       "Interactive bill calendar & goal priority stacking",
-      "Opportunity-cost simulator, Sankey diagrams & life-event reports",
+      "Opportunity-cost simulator & Sankey diagrams",
       "Peer benchmarking",
       "BNPL, promotional-APR & statutory-interest tracking",
       "Debt consolidation & refinancing modeling",
@@ -121,7 +122,6 @@ export const TIERS: Tier[] = [
       "AI Debt Strategy Planner, Forecasting & Financial Health Score",
       "AI negotiation scripts & impulse guard",
       "SOC 2 Type II, local database encryption & valuation hooks",
-      "Optional gamification (full suite)",
     ],
   },
   {
@@ -159,7 +159,7 @@ export const TIERS: Tier[] = [
       "Purchase approval workflow",
       "Family analytics & net worth aggregation",
       "Transaction assigner & His/Hers/Ours split views",
-      "Chore & allowance managers",
+      "Allowance manager & member wallets",
       "Financial literacy academy",
     ],
   },
@@ -213,6 +213,7 @@ export const FEATURES: Feature[] = [
   { key: "debt", label: "Debt tracking", description: "Track balances, APRs & minimums", level: 0 },
   { key: "accounts", label: "Accounts", description: "Balances across your accounts", level: 0 },
   { key: "export", label: "CSV export", description: "Export your transactions", level: 0 },
+  { key: "gamification", label: "Rewards & gamification", description: "XP, levels, streaks & achievements — free for everyone", level: 0 },
   // Tier 1 (level 1) — automation & insight
   { key: "recurring", label: "Recurring & subscription detection", description: "Auto-detect repeating charges", level: 1 },
   { key: "reports", label: "Reports & trends", description: "Breakdowns, cashflow, heatmap", level: 1 },
@@ -225,14 +226,12 @@ export const FEATURES: Feature[] = [
   { key: "ai", label: "AI insights", description: "Advisor, optimizer, NL search", level: 2 },
   { key: "forecast", label: "Forecast & optimization", description: "Cashflow forecast, income pacing, sinking funds", level: 2 },
   // Tier 3 (level 3) — pro suite
-  { key: "gamification", label: "Rewards & gamification", description: "XP, levels, achievements", level: 3 },
   { key: "tax", label: "Tax intelligence", description: "Full federal/state tax modeling", level: 3 },
   { key: "advisor", label: "Advisor portal", description: "Share access with a pro", level: 3 },
-  { key: "intelligence", label: "Money intelligence", description: "Tax, debt, investment & life intelligence", level: 3 },
+  { key: "intelligence", label: "Money intelligence", description: "Tax, debt & investment intelligence", level: 3 },
   { key: "audit", label: "Audit trail", description: "Every change logged, timestamped & reviewable", level: 3 },
   // Family plans only
   { key: "family", label: "Family management", description: "Up to 5 members, allowances, overview", level: 1, familyOnly: true },
-  { key: "chores", label: "Chores & allowance automation", description: "Assign chores; completing them pays the wallet", level: 2, familyOnly: true },
   { key: "approvals", label: "Purchase approvals", description: "Members request, you approve — straight from the wallet", level: 2, familyOnly: true },
 ];
 

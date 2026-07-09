@@ -54,4 +54,27 @@
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
+  <url>
+    <loc>https://budgetsmarttme.com/help</loc>
+    <lastmod>2026-07-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url><loc>https://budgetsmarttme.com/help/install</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/first-steps</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/import-statement</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/scheduled-charges</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/budgets</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/goals-debt</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/forecast</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/plans</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/redeem-code</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/custom-orders</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/sharing</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/master-view</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/data-privacy</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/updates</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/help/troubleshooting</loc><lastmod>2026-07-08</lastmod><priority>0.6</priority></url>
+  <url><loc>https://budgetsmarttme.com/terms</loc><lastmod>2026-07-08</lastmod><priority>0.4</priority></url>
+  <url><loc>https://budgetsmarttme.com/privacy</loc><lastmod>2026-07-08</lastmod><priority>0.4</priority></url>
 </urlset>

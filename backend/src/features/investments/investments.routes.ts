@@ -2,10 +2,10 @@ import { ASSET_CLASSES, buildPortfolio, projectGrowth } from "@budgetsmart/share
 import { Router } from "express";
 import { z } from "zod";
 import { holdings } from "../../db/repo.js";
-import { env } from "../../env.js";
 import { ApiError, asyncHandler, routeParam } from "../../lib/http.js";
 import { serializeHolding } from "../../lib/serialize.js";
 import { requireAuth, userIdOf } from "../../middleware/auth.js";
+import { refreshUserPrices } from "./priceSync.js";
 
 const createSchema = z.object({
   name: z.string().min(1).max(80),
@@ -18,14 +18,6 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
-
-/** Map an app symbol to the market hub's provider symbol (crypto pairs). */
-function providerSymbol(symbol: string, assetClass: string): string {
-  const s = symbol.trim().toUpperCase();
-  if (!s || s.includes(":")) return s;
-  if (assetClass === "crypto") return `BINANCE:${s}USDT`;
-  return s;
-}
 
 const projectionSchema = z.object({
   monthly: z.coerce.number().int().min(0).default(0),
@@ -87,38 +79,15 @@ investmentsRouter.delete(
   }),
 );
 
-/** POST /investments/refresh-prices — pull live market quotes into holdings. */
+/** POST /investments/refresh-prices — pull live market quotes into holdings.
+ *  (Also runs automatically in the background — see priceSync.ts.) */
 investmentsRouter.post(
   "/refresh-prices",
   asyncHandler(async (req, res) => {
-    const userId = userIdOf(req);
-    const list = holdings.listByUser(userId).filter((h) => h.symbol.trim().length > 0);
-    if (list.length === 0) {
-      res.json({ updated: 0, skipped: 0 });
-      return;
-    }
-    const bySymbol = new Map<string, typeof list>();
-    for (const h of list) {
-      const key = providerSymbol(h.symbol, h.assetClass);
-      (bySymbol.get(key) ?? bySymbol.set(key, [] as typeof list).get(key)!).push(h);
-    }
-    const symbols = [...bySymbol.keys()].slice(0, 15);
-    let quotes: Array<{ symbol: string; price: number }> = [];
     try {
-      const r = await fetch(`${env.centralApiUrl}/market/quote?symbols=${encodeURIComponent(symbols.join(","))}`, {
-        signal: AbortSignal.timeout(15000),
-      });
-      if (r.ok) quotes = ((await r.json()) as { quotes: Array<{ symbol: string; price: number }> }).quotes ?? [];
+      res.json(await refreshUserPrices(userIdOf(req)));
     } catch {
       throw ApiError.badRequest("Couldn't reach the market service — are you online?");
     }
-    let updated = 0;
-    for (const q of quotes) {
-      for (const h of bySymbol.get(q.symbol) ?? []) {
-        holdings.update(h.id, { currentPrice: Math.round(q.price * 100) });
-        updated++;
-      }
-    }
-    res.json({ updated, skipped: list.length - updated });
   }),
 );

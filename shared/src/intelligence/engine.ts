@@ -1,6 +1,6 @@
 // T3 money intelligence: tax projection & planning, debt intelligence
 // (BNPL / promo APR / refinancing), investment intelligence (fees, employer
-// match, rebalancing), life-event modeling, opportunity cost, negotiation
+// match, rebalancing), opportunity cost, negotiation
 // scripts and impulse guard. Estimates, not tax/financial advice.
 import { sumCents, type Cents } from "../money.js";
 import { detectRecurring, normalizeMerchant, type RecurringOverride } from "../recurring/engine.js";
@@ -166,18 +166,8 @@ export interface InvestIntel {
 }
 
 /* ------------------------------------------------------------------ *
- * Life intelligence + AI extras
+ * AI extras
  * ------------------------------------------------------------------ */
-export interface LifeEventModel {
-  key: string;
-  icon: string;
-  title: string;
-  monthlyCost: Cents;
-  note: string;
-  /** New monthly net after the event, from the user's current average. */
-  newMonthlyNet: Cents;
-}
-
 export interface OpportunityCostRow {
   years: number;
   futureValue: Cents;
@@ -201,7 +191,6 @@ export interface IntelligenceSummary {
   tax: TaxIntel;
   debt: DebtIntel;
   invest: InvestIntel;
-  life: LifeEventModel[];
   /** FV of $100/mo invested, per horizon — the opportunity-cost table. */
   opportunity: OpportunityCostRow[];
   negotiation: NegotiationScript[];
@@ -478,17 +467,6 @@ export function buildIntelligence(input: IntelligenceInput): IntelligenceSummary
   }
   const monthlyNet = Math.round((inc3 - exp3) / 3);
 
-  const LIFE_PRESETS: Array<{ key: string; icon: string; title: string; monthlyCost: Cents; note: string }> = [
-    { key: "baby", icon: "👶", title: "New baby", monthlyCost: 120_000, note: "Diapers, childcare, healthcare — first-year average." },
-    { key: "car", icon: "🚗", title: "Car payment ($30k, 60mo @ 7%)", monthlyCost: 59_400, note: "Plus insurance and fuel on top." },
-    { key: "mortgage", icon: "🏠", title: "Mortgage step-up (+$300k @ 6.5%)", monthlyCost: 189_600, note: "Principal & interest only — taxes and insurance extra." },
-    { key: "job", icon: "💼", title: "Job change (-10% pay)", monthlyCost: Math.max(0, Math.round((inc3 / 3) * 0.1)), note: "Impact of a 10% pay cut from your current average income." },
-  ];
-  const life: LifeEventModel[] = LIFE_PRESETS.map((p) => ({
-    ...p,
-    newMonthlyNet: monthlyNet - p.monthlyCost,
-  }));
-
   // negotiation scripts for the top recurring bills
   const recurring = detectRecurring({ transactions, categories, now, overrides: input.recurringOverrides });
   const negotiation: NegotiationScript[] = recurring.items
@@ -542,7 +520,6 @@ export function buildIntelligence(input: IntelligenceInput): IntelligenceSummary
     tax,
     debt: { bnpl, refinance, promoRisks },
     invest: { fees, totalAnnualFees: sumCents(fees.map((f) => f.annualFee)), rebalance, match },
-    life,
     opportunity: opportunityCost(10_000),
     negotiation,
     impulse: { purchases, total30d: sumCents(purchases.map((p) => p.amount)) },

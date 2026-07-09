@@ -2,14 +2,28 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { hashPassword, verifyPassword, randomToken, newId } from "./crypto.js";
-import { sendVerificationEmail, sendFamilyInviteEmail, sendMonthlyDigestEmail, type DigestPayload } from "./email.js";
+import {
+  sendVerificationEmail,
+  sendFamilyInviteEmail,
+  sendMonthlyDigestEmail,
+  sendOrderReceiptEmail,
+  sendRedemptionCodeEmail,
+  type DigestPayload,
+} from "./email.js";
 import { stripe, verifyStripeSignature } from "./stripe.js";
 import { isInterval, isValidTier, priceIdForTier, tierForPriceId } from "./tiers.js";
+import { quoteOrder, planFeatureLabel, MIN_CUSTOM_SEATS, MIN_ENTERPRISE_SEATS } from "./plans.js";
+import {
+  SECURITY_HEADERS, HONEYPOT_PATHS, clientIp, clientCountry, ipHash,
+  logSec, buildEvidenceReport, checkRateLimit, isIpBlocked, blockIpHash, isLockedDown,
+  loginLockedUntil, recordLoginFail, clearLoginFails, noteUserCountry,
+  getConfig, setConfig, encryptField, decryptField,
+} from "./security.js";
 import { generateSecret, verifyTotp, otpauthUri } from "./totp.js";
 import { CORE_SYMBOLS, getHistory, getQuotes, refreshMarket, toProviderSymbol } from "./market.js";
 import type { AccountView, Env, UserRow } from "./types.js";
 
-type Vars = { userId: string };
+type Vars = { userId: string; ip: string; country: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -140,10 +154,59 @@ app.use(
         ? origin || "*"
         : "",
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "x-upload-token"],
     maxAge: 86400,
   }),
 );
+
+/* ------------------------------------------------------------------ *
+ * Security perimeter middleware (see security.ts):
+ *  - stamps client IP + country on the context,
+ *  - hardens every response with security headers,
+ *  - honours the global lockdown kill-switch on mutating requests,
+ *  - blocks IPs that have tripped a honeypot or been blocked by an admin.
+ * Reads stay fast: the IP-block/lockdown checks only run on mutating
+ * requests (POST/PUT/DELETE/PATCH), and lockdown state is isolate-cached.
+ * ------------------------------------------------------------------ */
+app.use("*", async (c, next) => {
+  const ip = clientIp(c);
+  const country = clientCountry(c);
+  c.set("ip", ip);
+  c.set("country", country);
+
+  const mutating = c.req.method !== "GET" && c.req.method !== "OPTIONS" && c.req.method !== "HEAD";
+  if (mutating) {
+    // Lockdown: an operator can freeze all writes instantly during an incident.
+    // Admin security + billing-webhook paths stay reachable so we can recover.
+    const path = c.req.path;
+    const exempt = path.startsWith("/admin/") || path === "/webhooks/stripe";
+    if (!exempt && (await isLockedDown(c.env))) {
+      return c.json({ error: "Service is temporarily in maintenance/lockdown. Please try again shortly." }, 503);
+    }
+    const ipH = await ipHash(c.env, ip);
+    if (await isIpBlocked(c.env, ipH)) {
+      await logSec(c, { severity: "warn", type: "blocked_ip_hit", ip, country, path });
+      return c.json({ error: "Forbidden" }, 403);
+    }
+  }
+
+  await next();
+
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) c.res.headers.set(k, v);
+  c.res.headers.delete("x-powered-by");
+});
+
+/* Honeypots: no real client hits these. A request is a scanner/attacker —
+ * log it, block the source for 24h, and return a bland 404. */
+async function honeypot(c: any) {
+  const ip = clientIp(c);
+  const country = clientCountry(c);
+  const ipH = await ipHash(c.env, ip);
+  await blockIpHash(c.env, ipH, `honeypot:${c.req.path}`, 24 * 3600);
+  await logSec(c, { severity: "high", type: "honeypot", ip, country, path: c.req.path, detail: { method: c.req.method } });
+  return c.json({ error: "Not found" }, 404);
+}
+for (const p of HONEYPOT_PATHS) app.all(p, honeypot);
 
 app.get("/", (c) => c.json({ service: "budgetsmart-api", status: "ok", time: now() }));
 app.get("/health", (c) => c.json({ status: "ok" }));
@@ -165,6 +228,66 @@ const LATEST = {
   ios: "https://budgetsmart-api.budgetsmart.workers.dev/download/BudgetSmart.ipa",
 };
 app.get("/version", (c) => c.json(LATEST));
+
+/* ------------------------------------------------------------------ *
+ * Admin security surface (guarded by the upload token). This is the
+ * incident-response console: triage the event log, flip the lockdown
+ * kill-switch, and block/unblock sources.
+ * ------------------------------------------------------------------ */
+app.get("/admin/security/status", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const since = Date.now() - 24 * 3600 * 1000;
+  const bySeverity = (
+    await c.env.DB.prepare("SELECT severity, COUNT(*) AS n FROM security_events WHERE ts > ? GROUP BY severity").bind(since).all()
+  ).results;
+  const byType = (
+    await c.env.DB.prepare("SELECT type, COUNT(*) AS n FROM security_events WHERE ts > ? GROUP BY type ORDER BY n DESC LIMIT 15").bind(since).all()
+  ).results;
+  const blocks = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM ip_blocks WHERE until = 0 OR until > ?").bind(unix()).first<{ n: number }>())?.n ?? 0;
+  return c.json({ lockdown: (await getConfig(c.env, "lockdown")) === "1", last24h: { bySeverity, byType }, activeIpBlocks: blocks });
+});
+
+app.get("/admin/security/events", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const sev = c.req.query("severity");
+  const limit = Math.min(500, Math.max(1, Number(c.req.query("limit")) || 100));
+  const rows = sev
+    ? (await c.env.DB.prepare("SELECT * FROM security_events WHERE severity = ? ORDER BY ts DESC LIMIT ?").bind(sev, limit).all()).results
+    : (await c.env.DB.prepare("SELECT * FROM security_events ORDER BY ts DESC LIMIT ?").bind(limit).all()).results;
+  return c.json({ events: rows });
+});
+
+app.post("/admin/security/lockdown", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const on = !!(await c.req.json().catch(() => ({}))).on;
+  await setConfig(c.env, "lockdown", on ? "1" : "0");
+  await logSec(c, { severity: "critical", type: on ? "lockdown_on" : "lockdown_off", ip: c.get("ip"), country: c.get("country"), path: "/admin/security/lockdown" });
+  return c.json({ ok: true, lockdown: on });
+});
+
+app.post("/admin/security/block", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const b = await c.req.json().catch(() => ({}));
+  const ip = String(b.ip ?? "").trim();
+  if (!ip) return c.json({ error: "Pass an ip" }, 400);
+  const seconds = Math.max(0, Math.floor(Number(b.seconds) || 0)); // 0 = permanent
+  await blockIpHash(c.env, await ipHash(c.env, ip), String(b.reason ?? "manual"), seconds);
+  await logSec(c, { severity: "warn", type: "manual_block", path: "/admin/security/block", detail: { seconds } });
+  return c.json({ ok: true });
+});
+
+/** Law-enforcement-forwardable evidence report: source IPs, ISP/ASN, geo,
+ *  targeted accounts and timestamps. `?format=text` returns a paste-ready
+ *  report; default JSON. `?days=` window (default 7, max 90). */
+app.get("/admin/security/report", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const days = Math.min(90, Math.max(1, Number(c.req.query("days")) || 7));
+  const { json, text } = await buildEvidenceReport(c.env, days);
+  if (c.req.query("format") === "text") {
+    return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  return c.json(json as Record<string, unknown>);
+});
 
 // Installer uploads through the R2 binding (multipart), guarded by a secret
 // token. R2's public/S3 side is inconsistent on this account, so installers are
@@ -234,10 +357,18 @@ app.get("/download/:file", async (c) => {
  * Auth
  * ------------------------------------------------------------------ */
 app.post("/auth/register", async (c) => {
+  const ip = c.get("ip");
+  // Cap new-account creation per IP so nobody can script thousands of accounts.
+  const rl = await checkRateLimit(c.env, `register:${await ipHash(c.env, ip)}`, 8, 3600);
+  if (!rl.ok) {
+    await logSec(c, { severity: "warn", type: "ratelimit", ip, country: c.get("country"), path: "/auth/register" });
+    c.res.headers.set("Retry-After", String(rl.retryAfter));
+    return c.json({ error: "Too many attempts — please wait a bit and try again." }, 429);
+  }
   const body = await c.req.json().catch(() => ({}));
   const email = normEmail(String(body.email ?? ""));
   const password = String(body.password ?? "");
-  const name = String(body.name ?? "").trim();
+  const name = String(body.name ?? "").trim().slice(0, 120);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "Enter a valid email" }, 400);
   if (password.length < 8) return c.json({ error: "Password must be at least 8 characters" }, 400);
 
@@ -309,6 +440,9 @@ app.get("/auth/verify", async (c) => {
 });
 
 app.post("/auth/resend", async (c) => {
+  // Cap resends per IP so nobody can weaponize us to email-bomb an address.
+  const rl = await checkRateLimit(c.env, `resend:${await ipHash(c.env, c.get("ip"))}`, 5, 3600);
+  if (!rl.ok) { c.res.headers.set("Retry-After", String(rl.retryAfter)); return c.json({ ok: true }); }
   const body = await c.req.json().catch(() => ({}));
   const email = normEmail(String(body.email ?? ""));
   const user = await getUserByEmail(c.env, email);
@@ -317,13 +451,37 @@ app.post("/auth/resend", async (c) => {
 });
 
 app.post("/auth/login", async (c) => {
+  const ip = c.get("ip");
+  const country = c.get("country");
   const body = await c.req.json().catch(() => ({}));
   const email = normEmail(String(body.email ?? ""));
   const password = String(body.password ?? "");
+
+  // Brute-force controls: per-IP rate limit + per-(email,ip) escalating lockout.
+  const rl = await checkRateLimit(c.env, `login:${await ipHash(c.env, ip)}`, 20, 900);
+  if (!rl.ok) {
+    await logSec(c, { severity: "high", type: "ratelimit", ip, country, path: "/auth/login", detail: { email } });
+    c.res.headers.set("Retry-After", String(rl.retryAfter));
+    return c.json({ error: "Too many sign-in attempts — please wait and try again." }, 429);
+  }
+  const lockKey = `${email}|${await ipHash(c.env, ip)}`;
+  const lockedUntil = await loginLockedUntil(c.env, lockKey);
+  if (lockedUntil) {
+    return c.json({ error: "This account is temporarily locked after too many failed attempts. Try again later or reset your password." }, 429);
+  }
+
   const user = await getUserByEmail(c.env, email);
   if (!user || !(await verifyPassword(password, user.password_hash))) {
+    const { fails, lockedUntil: lu } = await recordLoginFail(c.env, lockKey);
+    await logSec(c, {
+      severity: lu ? "high" : "info",
+      type: lu ? "lockout" : "login_fail",
+      ip, country, userId: user?.id ?? null, path: "/auth/login", detail: { email, fails },
+    });
     return c.json({ error: "Incorrect email or password" }, 401);
   }
+  await clearLoginFails(c.env, lockKey);
+
   if (user.email_verified === 0) {
     await createAndSendVerification(c.env, user);
     return c.json({ error: "Please verify your email — we've sent a new link.", code: "email_unverified" }, 403);
@@ -333,6 +491,12 @@ app.post("/auth/login", async (c) => {
     // short-lived challenge the client redeems at /auth/2fa/verify with a code.
     const challenge = await sign({ sub: user.id, twofa: "pending", exp: unix() + 300 }, c.env.JWT_SECRET, "HS256");
     return c.json({ twoFactor: true, challenge });
+  }
+  // Geo-velocity anomaly: alert on first successful login from a new country.
+  const geo = await noteUserCountry(c.env, user.id, country);
+  if (geo.isNew) {
+    await logSec(c, { severity: "critical", type: "new_country_login", ip, country, userId: user.id, path: "/auth/login", detail: { email } });
+    await notify(c.env, user.id, "security", "New sign-in location", `Your account was accessed from a new country (${country}). If this wasn't you, change your password and enable two-factor.`);
   }
   const token = await issueToken(c.env, user);
   return c.json({ token, account: await accountView(c.env, user) });
@@ -350,8 +514,20 @@ app.post("/auth/2fa/verify", async (c) => {
   if (payload.twofa !== "pending") return c.json({ error: "Invalid challenge" }, 400);
   const user = await getUserById(c.env, String(payload.sub));
   if (!user || user.totp_enabled !== 1 || !user.totp_secret) return c.json({ error: "Two-factor isn't enabled" }, 400);
-  if (!(await verifyTotp(user.totp_secret, String(body.code ?? "")))) {
+  // Throttle TOTP guesses on a valid challenge (6-digit codes are brute-forceable).
+  const rl = await checkRateLimit(c.env, `2fa:${user.id}`, 10, 300);
+  if (!rl.ok) {
+    await logSec(c, { severity: "high", type: "2fa_bruteforce", ip: c.get("ip"), country: c.get("country"), userId: user.id, path: "/auth/2fa/verify" });
+    return c.json({ error: "Too many codes — wait a few minutes and sign in again." }, 429);
+  }
+  const totpSecret = await decryptField(c.env, user.totp_secret);
+  if (!totpSecret || !(await verifyTotp(totpSecret, String(body.code ?? "")))) {
+    await logSec(c, { severity: "info", type: "2fa_fail", ip: c.get("ip"), country: c.get("country"), userId: user.id, path: "/auth/2fa/verify" });
     return c.json({ error: "Incorrect code — check your authenticator app" }, 401);
+  }
+  const geo = await noteUserCountry(c.env, user.id, c.get("country"));
+  if (geo.isNew) {
+    await logSec(c, { severity: "critical", type: "new_country_login", ip: c.get("ip"), country: c.get("country"), userId: user.id, path: "/auth/2fa/verify" });
   }
   const token = await issueToken(c.env, user);
   return c.json({ token, account: await accountView(c.env, user) });
@@ -481,7 +657,9 @@ app.post("/account/2fa/setup", auth, async (c) => {
   if (!user) return c.json({ error: "Not found" }, 404);
   if (user.totp_enabled === 1) return c.json({ error: "Two-factor is already on" }, 400);
   const secret = generateSecret();
-  await c.env.DB.prepare("UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?").bind(secret, now(), user.id).run();
+  // Stored encrypted at rest (field-level AES-GCM); the plaintext is only
+  // returned once here so the user can add it to their authenticator.
+  await c.env.DB.prepare("UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?").bind(await encryptField(c.env, secret), now(), user.id).run();
   return c.json({ secret, otpauth: otpauthUri(user.email, secret) });
 });
 
@@ -491,7 +669,8 @@ app.post("/account/2fa/enable", auth, async (c) => {
   if (!user) return c.json({ error: "Not found" }, 404);
   if (!user.totp_secret) return c.json({ error: "Start setup first" }, 400);
   const code = String((await c.req.json().catch(() => ({}))).code ?? "");
-  if (!(await verifyTotp(user.totp_secret, code))) return c.json({ error: "That code didn't match — check your authenticator" }, 400);
+  const setupSecret = await decryptField(c.env, user.totp_secret);
+  if (!setupSecret || !(await verifyTotp(setupSecret, code))) return c.json({ error: "That code didn't match — check your authenticator" }, 400);
   await c.env.DB.prepare("UPDATE users SET totp_enabled = 1, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
   await notify(c.env, user.id, "security", "Two-factor authentication enabled", "Your account now asks for a 6-digit code when you sign in.");
   const updated = await getUserById(c.env, user.id);
@@ -503,7 +682,8 @@ app.post("/account/2fa/disable", auth, async (c) => {
   const user = await getUserById(c.env, c.get("userId"));
   if (!user) return c.json({ error: "Not found" }, 404);
   const code = String((await c.req.json().catch(() => ({}))).code ?? "");
-  if (user.totp_enabled === 1 && user.totp_secret && !(await verifyTotp(user.totp_secret, code))) {
+  const disableSecret = user.totp_secret ? await decryptField(c.env, user.totp_secret) : null;
+  if (user.totp_enabled === 1 && disableSecret && !(await verifyTotp(disableSecret, code))) {
     return c.json({ error: "Enter a current code to turn 2FA off" }, 400);
   }
   await c.env.DB.prepare("UPDATE users SET totp_enabled = 0, totp_secret = NULL, updated_at = ? WHERE id = ?").bind(now(), user.id).run();
@@ -550,7 +730,7 @@ app.post("/notifications/read-all", auth, async (c) => {
  * Family plans — the owner of a fam_* subscription shares it with up
  * to FAMILY_SIZE people (owner included) via emailed invites.
  * ------------------------------------------------------------------ */
-const FAMILY_SIZE = 5;
+const FAMILY_SIZE = 5; // default seat cap for a fam_* tier group
 const INVITE_TTL_SECONDS = 60 * 60 * 24 * 14; // invites last 14 days
 
 interface FamilyRow { id: string; owner_id: string; created_at: string }
@@ -560,6 +740,18 @@ const familyByOwner = (env: Env, ownerId: string) =>
   env.DB.prepare("SELECT * FROM families WHERE owner_id = ?").bind(ownerId).first<FamilyRow>();
 const familyOfMember = (env: Env, userId: string) =>
   env.DB.prepare("SELECT f.* FROM families f JOIN family_members m ON m.family_id = f.id WHERE m.user_id = ?").bind(userId).first<FamilyRow>();
+
+/** Seat cap for a family. Default FAMILY_SIZE (5); code-redeemed teams raise it
+ *  via the family_seat_limits companion table. */
+async function familySeatLimit(env: Env, familyId: string): Promise<number> {
+  const row = await env.DB.prepare("SELECT seat_limit FROM family_seat_limits WHERE family_id = ?").bind(familyId).first<{ seat_limit: number }>();
+  return row?.seat_limit ?? FAMILY_SIZE;
+}
+async function setFamilySeatLimit(env: Env, familyId: string, seats: number): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO family_seat_limits (family_id, seat_limit) VALUES (?,?) ON CONFLICT(family_id) DO UPDATE SET seat_limit = MAX(seat_limit, excluded.seat_limit)",
+  ).bind(familyId, seats).run();
+}
 
 async function familySnapshot(env: Env, fam: FamilyRow, forOwner: boolean) {
   const members = (
@@ -576,9 +768,11 @@ async function familySnapshot(env: Env, fam: FamilyRow, forOwner: boolean) {
         ).bind(fam.id, unix()).all<{ id: string; to_email: string; created_at: string }>()
       ).results
     : [];
+  const seatLimit = await familySeatLimit(env, fam.id);
   return {
     id: fam.id,
     ownerId: fam.owner_id,
+    seatLimit,
     members: members.map((m) => ({
       id: m.id,
       name: m.name,
@@ -588,7 +782,7 @@ async function familySnapshot(env: Env, fam: FamilyRow, forOwner: boolean) {
       avatarUrl: m.avatar_key ? `${env.API_ORIGIN}/avatar/${m.id}` : null,
     })),
     invites,
-    seatsLeft: Math.max(0, FAMILY_SIZE - members.length - invites.length),
+    seatsLeft: Math.max(0, seatLimit - members.length - invites.length),
   };
 }
 
@@ -621,7 +815,7 @@ app.post("/family/invite", auth, async (c) => {
   }
 
   const snap = await familySnapshot(c.env, fam!, true);
-  if (snap.seatsLeft <= 0) return c.json({ error: `Family plans cover ${FAMILY_SIZE} people — remove a member or revoke an invite first` }, 400);
+  if (snap.seatsLeft <= 0) return c.json({ error: `Your plan covers ${snap.seatLimit} people — remove a member or revoke an invite first` }, 400);
   if (snap.members.some((m) => m.email === email)) return c.json({ error: "They're already in your family" }, 400);
   if (snap.invites.some((i) => i.to_email === email)) return c.json({ error: "They already have a pending invite" }, 400);
   const invited = await getUserByEmail(c.env, email);
@@ -654,7 +848,7 @@ app.post("/family/accept", auth, async (c) => {
   const fam = await c.env.DB.prepare("SELECT * FROM families WHERE id = ?").bind(inv.family_id).first<FamilyRow>();
   if (!fam) return c.json({ error: "This family no longer exists" }, 400);
   const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM family_members WHERE family_id = ?").bind(fam.id).first<{ n: number }>();
-  if ((count?.n ?? 0) >= FAMILY_SIZE) return c.json({ error: "This family is already full" }, 400);
+  if ((count?.n ?? 0) >= (await familySeatLimit(c.env, fam.id))) return c.json({ error: "This plan is already full" }, 400);
 
   await c.env.DB.prepare("INSERT INTO family_members (family_id, user_id, role, joined_at) VALUES (?,?,'member',?)").bind(fam.id, user.id, now()).run();
   await c.env.DB.prepare("UPDATE family_invites SET status = 'accepted' WHERE id = ?").bind(inv.id).run();
@@ -697,6 +891,307 @@ app.post("/family/leave", auth, async (c) => {
   await c.env.DB.prepare("DELETE FROM family_members WHERE family_id = ? AND user_id = ?").bind(fam.id, user.id).run();
   await notify(c.env, fam.owner_id, "family", `${user.name || user.email} left your family`, undefined);
   return c.json({ ok: true, account: await accountView(c.env, user) });
+});
+
+/* ------------------------------------------------------------------ *
+ * Master overview — each member's app pushes a compact, locally-computed
+ * snapshot; the plan owner reads them all in one place. Raw transactions
+ * never leave the member's device — only these headline numbers.
+ * ------------------------------------------------------------------ */
+const SNAP_CATEGORY_MAX = 3;
+
+function sanitizeSnapshot(raw: any): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : 0);
+  const cats = Array.isArray(raw.topCategories) ? raw.topCategories.slice(0, SNAP_CATEGORY_MAX) : [];
+  return {
+    netWorth: num(raw.netWorth),
+    assets: num(raw.assets),
+    liabilities: num(raw.liabilities),
+    liquid: num(raw.liquid),
+    income30: num(raw.income30),
+    expenses30: num(raw.expenses30),
+    debtTotal: num(raw.debtTotal),
+    investTotal: num(raw.investTotal),
+    budgetCount: num(raw.budgetCount),
+    budgetOverCount: num(raw.budgetOverCount),
+    goalCount: num(raw.goalCount),
+    goalAvgPct: Math.max(0, Math.min(100, num(raw.goalAvgPct))),
+    topCategories: cats.map((c: any) => ({
+      name: String(c?.name ?? "").slice(0, 40),
+      icon: String(c?.icon ?? "•").slice(0, 8),
+      amount: num(c?.amount),
+    })),
+  };
+}
+
+/** A member's app pushes its latest snapshot (owner's app pushes too). */
+app.post("/family/snapshot", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const fam = (await familyByOwner(c.env, user.id)) ?? (await familyOfMember(c.env, user.id));
+  if (!fam) return c.json({ error: "You're not sharing a plan with anyone" }, 400);
+  const snap = sanitizeSnapshot(await c.req.json().catch(() => null));
+  if (!snap) return c.json({ error: "Bad snapshot" }, 400);
+  await c.env.DB.prepare(
+    `INSERT INTO family_snapshots (family_id, user_id, data, updated_at) VALUES (?,?,?,?)
+     ON CONFLICT(family_id, user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+  ).bind(fam.id, user.id, JSON.stringify(snap), now()).run();
+  return c.json({ ok: true });
+});
+
+/** Owner reads every member's snapshot — the Master tab's data source. */
+app.get("/family/overview", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  const fam = await familyByOwner(c.env, user.id);
+  if (!fam) return c.json({ error: "Only the plan owner can see the master overview" }, 403);
+
+  const snap = await familySnapshot(c.env, fam, true);
+  const snaps = await c.env.DB.prepare("SELECT user_id, data, updated_at FROM family_snapshots WHERE family_id = ?")
+    .bind(fam.id)
+    .all<{ user_id: string; data: string; updated_at: string }>();
+  const byUser = new Map((snaps.results ?? []).map((r) => [r.user_id, r]));
+
+  const members = snap.members.map((m) => {
+    const row = byUser.get(m.id);
+    let data: Record<string, unknown> | null = null;
+    try { data = row ? (JSON.parse(row.data) as Record<string, unknown>) : null; } catch { /* skip corrupt */ }
+    return { ...m, snapshot: data, snapshotAt: row?.updated_at ?? null };
+  });
+  const sum = (k: string) => members.reduce((s, m) => s + Number((m.snapshot as any)?.[k] ?? 0), 0);
+  return c.json({
+    family: { id: fam.id, seatLimit: snap.seatLimit, seatsLeft: snap.seatsLeft },
+    members,
+    totals: {
+      netWorth: sum("netWorth"),
+      liquid: sum("liquid"),
+      income30: sum("income30"),
+      expenses30: sum("expenses30"),
+      debtTotal: sum("debtTotal"),
+      investTotal: sum("investTotal"),
+      reporting: members.filter((m) => m.snapshot).length,
+    },
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Custom / Enterprise orders + redeemable codes.
+ *
+ * Flow: build a plan on the site → POST /orders (public) → we scan the
+ * picked features, price them by step band and email a receipt. Once paid,
+ * an admin call fulfils the order into a redemption code (also reusable by a
+ * future Stripe webhook). The buyer redeems the code (POST /codes/redeem),
+ * which unlocks the plan and lets them share seats by email — the exact same
+ * mechanism Family plans already use.
+ * ------------------------------------------------------------------ */
+interface OrderRow {
+  ref: string; plan_type: string; contact_name: string; contact_email: string;
+  seats: number; item_count: number; items: string; per_person: number; amount_cents: number;
+  status: string; code: string | null; created_at: string; updated_at: string;
+}
+interface CodeRow {
+  code: string; kind: string; tier: string; seats: number; features: string | null;
+  order_ref: string | null; status: string; redeemed_by: string | null; redeemed_at: string | null;
+  expires_at: number | null; created_at: string;
+}
+
+// Crockford base32 minus ambiguous chars (no I, L, O, U) — friendly to type.
+const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+function randChars(n: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(n));
+  let out = "";
+  for (let i = 0; i < n; i++) out += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
+  return out;
+}
+const newOrderRef = () => `BS-${randChars(6)}`;
+const newCodeCore = () => `BSMART${randChars(8)}`; // canonical stored form (no dashes)
+const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+function formatCode(core: string): string {
+  const body = core.replace(/^BSMART/, "");
+  return `BSMART-${body.slice(0, 4)}-${body.slice(4, 8)}`;
+}
+const YEAR_SECONDS = 365 * 86_400;
+
+/** Public: submit a Custom/Enterprise plan build → priced receipt by email. */
+app.post("/orders", async (c) => {
+  // Public + sends email → strict per-IP cap so it can't be used to spam.
+  const rl = await checkRateLimit(c.env, `orders:${await ipHash(c.env, c.get("ip"))}`, 6, 3600);
+  if (!rl.ok) {
+    await logSec(c, { severity: "warn", type: "ratelimit", ip: c.get("ip"), country: c.get("country"), path: "/orders" });
+    c.res.headers.set("Retry-After", String(rl.retryAfter));
+    return c.json({ error: "Too many order submissions — please wait a bit and try again." }, 429);
+  }
+  const b = await c.req.json().catch(() => ({}));
+  const email = normEmail(String(b.email ?? ""));
+  const name = String(b.name ?? "").trim().slice(0, 80);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "Enter a valid email address" }, 400);
+  const seats = Math.floor(Number(b.seats) || 0);
+  if (seats < MIN_CUSTOM_SEATS) return c.json({ error: `Teams start at ${MIN_CUSTOM_SEATS} people` }, 400);
+  const items = Array.isArray(b.items) ? b.items.map(String) : [];
+  const quote = quoteOrder(seats, items);
+
+  const ref = newOrderRef();
+  const ts = now();
+  await c.env.DB.prepare(
+    `INSERT INTO plan_orders (ref, plan_type, contact_name, contact_email, seats, item_count, items, per_person, amount_cents, status, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?, 'receipt_sent', ?, ?)`,
+  ).bind(ref, quote.planType, name, email, quote.seats, quote.itemCount, JSON.stringify(quote.items), quote.perPersonYear, quote.totalCents, ts, ts).run();
+
+  // Create a hosted Stripe Checkout link (ad-hoc price = this order's total) so
+  // the customer can pay right away. On success the webhook fulfils the order
+  // into a redemption code and emails it — fully automatic. If Stripe isn't
+  // reachable we still record the order and fall back to a "reply for invoice".
+  const origin = new URL(c.env.APP_URL).origin;
+  let payUrl: string | undefined;
+  if (c.env.STRIPE_SECRET_KEY) {
+    try {
+      const productName = `BudgetSmart ${quote.planType === "enterprise" ? "Enterprise" : "Custom"} plan — ${quote.seats} seats (annual)`;
+      const session = await stripe<{ url: string; id: string }>(c.env, "checkout/sessions", "POST", {
+        mode: "payment",
+        "line_items[0][quantity]": 1,
+        "line_items[0][price_data][currency]": "usd",
+        "line_items[0][price_data][unit_amount]": quote.totalCents,
+        "line_items[0][price_data][product_data][name]": productName,
+        customer_email: email,
+        "metadata[kind]": "plan_order",
+        "metadata[orderRef]": ref,
+        "payment_intent_data[metadata][kind]": "plan_order",
+        "payment_intent_data[metadata][orderRef]": ref,
+        success_url: `${origin}/account?order=paid`,
+        cancel_url: `${origin}/build?order=cancel`,
+      });
+      payUrl = session.url;
+      await c.env.DB.prepare("UPDATE plan_orders SET status = 'checkout_sent', updated_at = ? WHERE ref = ?").bind(now(), ref).run();
+    } catch (err) {
+      console.error("plan-order checkout create failed", String(err));
+    }
+  }
+
+  const receipt = {
+    ref, planType: quote.planType, seats: quote.seats, itemLabels: quote.items.map(planFeatureLabel),
+    perPersonYear: quote.perPersonYear, blockFee: quote.blockFee, total: quote.total, payUrl,
+  };
+  const sent = await sendOrderReceiptEmail(c.env, email, name, receipt);
+  // Drop an ops copy in the business inbox so new orders are visible.
+  if (c.env.GMAIL_USER && c.env.GMAIL_USER !== email) {
+    await sendOrderReceiptEmail(c.env, c.env.GMAIL_USER, "BudgetSmart team", receipt).catch(() => {});
+  }
+  return c.json({ ok: true, ref, sent, payUrl, quote });
+});
+
+/** Turn a paid order into a redemption code (idempotent). Emails the code.
+ *  Shared by the admin fulfil endpoint and, later, the Stripe webhook. */
+async function fulfillOrder(env: Env, order: OrderRow): Promise<CodeRow> {
+  if (order.code) {
+    const existing = await env.DB.prepare("SELECT * FROM redemption_codes WHERE code = ?").bind(order.code).first<CodeRow>();
+    if (existing) return existing;
+  }
+  const core = newCodeCore();
+  const tier = "fam_t3"; // Custom/Enterprise grant the full team feature set; seats governs sharing.
+  await env.DB.prepare(
+    `INSERT INTO redemption_codes (code, kind, tier, seats, features, order_ref, status, expires_at, created_at)
+     VALUES (?,?,?,?,?,?, 'unredeemed', ?, ?)`,
+  ).bind(core, order.plan_type, tier, order.seats, order.items, order.ref, unix() + YEAR_SECONDS, now()).run();
+  await env.DB.prepare("UPDATE plan_orders SET status = 'fulfilled', code = ?, updated_at = ? WHERE ref = ?").bind(core, now(), order.ref).run();
+  const planLabel = `${order.plan_type === "enterprise" ? "Enterprise" : "Custom"} (${order.seats} seats)`;
+  await sendRedemptionCodeEmail(env, order.contact_email, order.contact_name, { code: formatCode(core), planLabel, seats: order.seats });
+  return (await env.DB.prepare("SELECT * FROM redemption_codes WHERE code = ?").bind(core).first<CodeRow>())!;
+}
+
+/** Admin: mark an order paid and issue its code. Guarded by the upload token. */
+app.post("/admin/orders/fulfill", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const ref = String((await c.req.json().catch(() => ({}))).ref ?? "").trim().toUpperCase();
+  const order = await c.env.DB.prepare("SELECT * FROM plan_orders WHERE ref = ?").bind(ref).first<OrderRow>();
+  if (!order) return c.json({ error: "Order not found" }, 404);
+  const code = await fulfillOrder(c.env, order);
+  return c.json({ ok: true, ref: order.ref, code: formatCode(code.code) });
+});
+
+/** Admin: list recent orders for fulfilment. */
+app.get("/admin/orders", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const rows = (
+    await c.env.DB.prepare(
+      "SELECT ref, plan_type, contact_email, seats, item_count, amount_cents, status, code, created_at FROM plan_orders ORDER BY created_at DESC LIMIT 100",
+    ).all()
+  ).results;
+  return c.json({ orders: rows });
+});
+
+/** Admin: mint a code directly (comps / gifts / manual fulfilment). */
+app.post("/admin/codes/create", async (c) => {
+  if (!uploadAllowed(c)) return c.json({ error: "unauthorized" }, 401);
+  const b = await c.req.json().catch(() => ({}));
+  const tier = String(b.tier ?? "fam_t3");
+  if (!isValidTier(tier)) return c.json({ error: "Invalid tier" }, 400);
+  const seats = Math.max(1, Math.floor(Number(b.seats) || 1));
+  const days = Math.max(1, Math.floor(Number(b.days) || 365));
+  const core = newCodeCore();
+  await c.env.DB.prepare(
+    "INSERT INTO redemption_codes (code, kind, tier, seats, status, expires_at, created_at) VALUES (?,?,?,?, 'unredeemed', ?, ?)",
+  ).bind(core, seats > 1 ? "custom" : "gift", tier, seats, unix() + days * 86_400, now()).run();
+  return c.json({ ok: true, code: formatCode(core), tier, seats });
+});
+
+/** Apply a code's entitlement to a user (+ set up their shareable team). */
+async function applyCodeToUser(env: Env, user: UserRow, code: CodeRow): Promise<void> {
+  await setEntitlement(env, user.id, { tier: code.tier, status: "active", periodEnd: code.expires_at ?? unix() + YEAR_SECONDS });
+  if (code.seats > 1) {
+    let fam = await familyByOwner(env, user.id);
+    if (!fam) {
+      const id = newId();
+      await env.DB.prepare("INSERT INTO families (id, owner_id, created_at) VALUES (?,?,?)").bind(id, user.id, now()).run();
+      await env.DB.prepare("INSERT INTO family_members (family_id, user_id, role, joined_at) VALUES (?,?,'owner',?)").bind(id, user.id, now()).run();
+      fam = await familyByOwner(env, user.id);
+    }
+    if (fam) await setFamilySeatLimit(env, fam.id, code.seats);
+  }
+}
+
+/** Redeem a code → unlock the plan on the signed-in account. */
+app.post("/codes/redeem", auth, async (c) => {
+  const user = await getUserById(c.env, c.get("userId"));
+  if (!user) return c.json({ error: "Not found" }, 404);
+  // Codes are unguessable, but cap redemption attempts anyway so nobody can
+  // grind the space or use us as an oracle.
+  const rl = await checkRateLimit(c.env, `redeem:${user.id}`, 12, 3600);
+  if (!rl.ok) {
+    await logSec(c, { severity: "high", type: "redeem_abuse", ip: c.get("ip"), country: c.get("country"), userId: user.id, path: "/codes/redeem" });
+    c.res.headers.set("Retry-After", String(rl.retryAfter));
+    return c.json({ error: "Too many attempts — please wait before trying another code." }, 429);
+  }
+  const code = normalizeCode(String((await c.req.json().catch(() => ({}))).code ?? ""));
+  if (!code) return c.json({ error: "Enter a code" }, 400);
+
+  const row = await c.env.DB.prepare("SELECT * FROM redemption_codes WHERE code = ?").bind(code).first<CodeRow>();
+  if (!row) {
+    await logSec(c, { severity: "info", type: "redeem_miss", ip: c.get("ip"), country: c.get("country"), userId: user.id, path: "/codes/redeem" });
+    return c.json({ error: "That code isn't valid" }, 404);
+  }
+  if (row.status === "revoked") return c.json({ error: "That code has been revoked" }, 400);
+  if (row.redeemed_by && row.redeemed_by !== user.id) return c.json({ error: "That code has already been redeemed" }, 400);
+  if (row.expires_at && row.expires_at < unix()) return c.json({ error: "That code has expired" }, 400);
+
+  if (row.seats > 1) {
+    const memberFam = await familyOfMember(c.env, user.id);
+    if (memberFam && memberFam.owner_id !== user.id) {
+      return c.json({ error: "Leave your current shared plan before redeeming a team code" }, 400);
+    }
+  }
+
+  await applyCodeToUser(c.env, user, row);
+  if (!row.redeemed_by) {
+    await c.env.DB.prepare("UPDATE redemption_codes SET status = 'active', redeemed_by = ?, redeemed_at = ? WHERE code = ?")
+      .bind(user.id, now(), code).run();
+  }
+  await notify(
+    c.env, user.id, "billing", "Plan unlocked 🎉",
+    row.seats > 1 ? "Your team plan is active — invite your team by email from Sharing below." : "Your plan is active. Reload the app to sync your features.",
+  );
+  const updated = await getUserById(c.env, user.id);
+  return c.json({ ok: true, account: await accountView(c.env, updated!) });
 });
 
 /**
@@ -902,6 +1397,14 @@ async function handleEvent(env: Env, event: { type: string; data: { object: any 
   const obj = event.data.object;
   switch (event.type) {
     case "checkout.session.completed": {
+      // Custom/Enterprise plan order: no user account needed — the paid order
+      // is fulfilled into a redemption code that gets emailed to the buyer.
+      if (obj.metadata?.kind === "plan_order" && obj.metadata?.orderRef) {
+        if (obj.payment_status && obj.payment_status !== "paid") return;
+        const order = await env.DB.prepare("SELECT * FROM plan_orders WHERE ref = ?").bind(String(obj.metadata.orderRef)).first<OrderRow>();
+        if (order) await fulfillOrder(env, order);
+        return;
+      }
       const userId = await resolveUserId(env, obj);
       if (!userId) return;
       const customerId = obj.customer as string | undefined;

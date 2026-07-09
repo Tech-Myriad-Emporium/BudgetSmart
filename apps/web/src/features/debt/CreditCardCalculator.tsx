@@ -27,14 +27,17 @@ export function CreditCardCalculator() {
   const [balanceText, setBalanceText] = useState("5000");
   const [aprText, setAprText] = useState("22.99");
   const [limitText, setLimitText] = useState("10000");
+  const [scoreText, setScoreText] = useState("");
 
   const analysis = useMemo(() => {
     const balance = parseMoney(balanceText) ?? 0;
     const aprBps = Math.round((Number(aprText.replace(/[^0-9.]/g, "")) || 0) * 100);
     const creditLimit = parseMoney(limitText) ?? 0;
+    const parsedScore = parseInt(scoreText.replace(/\D/g, ""), 10);
+    const currentScore = Number.isFinite(parsedScore) && parsedScore >= 300 && parsedScore <= 850 ? parsedScore : undefined;
     if (balance <= 0) return null;
-    return analyzeCreditCard({ balance, aprBps, creditLimit });
-  }, [balanceText, aprText, limitText]);
+    return analyzeCreditCard({ balance, aprBps, creditLimit, currentScore });
+  }, [balanceText, aprText, limitText, scoreText]);
 
   const band = analysis ? BAND_META[analysis.credit.band] : null;
 
@@ -49,7 +52,7 @@ export function CreditCardCalculator() {
       </div>
 
       {/* inputs */}
-      <div className="grid grid-3" style={{ gap: 12, marginBottom: 18 }}>
+      <div className="grid grid-2" style={{ gap: 12, marginBottom: 18 }}>
         <Field label="Balance">
           <div className="input-prefix">
             <span>$</span>
@@ -64,6 +67,9 @@ export function CreditCardCalculator() {
             <span>$</span>
             <input className="input mono" inputMode="decimal" value={limitText} onChange={(e) => setLimitText(e.target.value)} />
           </div>
+        </Field>
+        <Field label="Current credit score" hint="300–850 · optional">
+          <input className="input mono" inputMode="numeric" maxLength={3} placeholder="e.g. 680" value={scoreText} onChange={(e) => setScoreText(e.target.value)} />
         </Field>
       </div>
 
@@ -88,7 +94,7 @@ export function CreditCardCalculator() {
 
           {/* credit utilization */}
           <span className="label">Potential credit gains</span>
-          <div className="card" style={{ background: "#000", marginTop: 8 }}>
+          <div className="card" style={{ background: "var(--input-bg)", marginTop: 8 }}>
             <div className="row between wrap" style={{ gap: 12 }}>
               <div className="col">
                 <span className="faint text-xs">Current utilization</span>
@@ -97,9 +103,18 @@ export function CreditCardCalculator() {
                   <span className={`badge ${band!.cls}`}>{band!.label}</span>
                 </div>
               </div>
+              <div className="col" style={{ alignItems: "center" }}>
+                <span className="faint text-xs">{analysis.credit.scoreAssumed ? "Assumed score" : "Your score"}</span>
+                <span className="stat stat-lg">{analysis.credit.currentScore}</span>
+              </div>
               <div className="col" style={{ alignItems: "flex-end" }}>
-                <span className="faint text-xs">Est. score gain to ~10% util</span>
-                <span className="stat stat-lg accent">+{analysis.credit.estimatedScoreGain} pts</span>
+                <span className="faint text-xs">Pay to ~10% util → est.</span>
+                <div className="row gap-sm" style={{ alignItems: "baseline" }}>
+                  <span className="stat stat-lg accent">{analysis.credit.projectedScore}</span>
+                  {analysis.credit.estimatedScoreGain > 0 && (
+                    <span className="badge accent">+{analysis.credit.estimatedScoreGain} pts</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="divider" style={{ margin: "14px 0" }} />
@@ -112,8 +127,11 @@ export function CreditCardCalculator() {
               </span>
             </div>
             <div className="faint text-xs" style={{ marginTop: 10 }}>
-              Utilization is ~30% of a FICO score — paying the balance down is one of the fastest ways to gain points.
-              Score estimate is illustrative, not a guarantee.
+              {analysis.credit.scoreAssumed
+                ? "Enter your real score above for a personalized estimate (we assumed 680, the US middle). "
+                : ""}
+              Utilization is ~30% of a FICO score, and the gain depends on where you start — lower scores have more room to
+              recover than scores already near the top. Estimate is illustrative, not a guarantee.
             </div>
           </div>
         </>

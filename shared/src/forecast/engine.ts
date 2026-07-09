@@ -3,7 +3,7 @@
 // advice feed. Pure functions over local data.
 import { sumCents, type Cents } from "../money.js";
 import { detectRecurring, normalizeMerchant, type RecurringOverride } from "../recurring/engine.js";
-import { LIABILITY_ACCOUNT_TYPES, type Account, type Category, type Transaction } from "../types.js";
+import { LIABILITY_ACCOUNT_TYPES, type Account, type Category, type ScheduledCharge, type Transaction } from "../types.js";
 
 const DAY = 86_400_000;
 const parseIso = (iso: string): number => {
@@ -97,6 +97,43 @@ export interface ForecastInput {
   now?: Date;
   horizonDays?: number;
   recurringOverrides?: RecurringOverride[];
+  /** User-scheduled charges (exact dates). Explicit schedules beat detection. */
+  scheduled?: ScheduledCharge[];
+}
+
+/** Days between occurrences for a repeating scheduled charge. */
+function scheduledIntervalDays(s: ScheduledCharge): number {
+  if (s.type === "custom") return Math.max(1, s.intervalDays ?? 30);
+  switch (s.cadence) {
+    case "weekly": return 7;
+    case "biweekly": return 14;
+    case "yearly": return 365;
+    default: return 30; // monthly
+  }
+}
+
+/** Concrete occurrence dates (ms) for a scheduled charge inside [fromMs, toMs]. */
+function scheduledOccurrences(s: ScheduledCharge, fromMs: number, toMs: number): number[] {
+  const endMs = s.endDate ? parseIso(s.endDate) : Number.POSITIVE_INFINITY;
+  let ms = parseIso(s.nextDate);
+  if (s.type === "once") {
+    return ms >= fromMs && ms <= toMs && ms <= endMs ? [ms] : [];
+  }
+  const out: number[] = [];
+  let guard = 0;
+  while (ms <= toMs && ms <= endMs && guard++ < 400) {
+    if (ms >= fromMs) out.push(ms);
+    if (s.type === "recurring" && s.cadence === "monthly") {
+      const d = new Date(ms);
+      ms = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+    } else if (s.type === "recurring" && s.cadence === "yearly") {
+      const d = new Date(ms);
+      ms = Date.UTC(d.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate());
+    } else {
+      ms += scheduledIntervalDays(s) * DAY;
+    }
+  }
+  return out;
 }
 
 export function buildForecast(input: ForecastInput): ForecastSummary {
@@ -141,6 +178,15 @@ export function buildForecast(input: ForecastInput): ForecastSummary {
   }
   incomeStreams.sort((a, b) => b.typicalAmount - a.typicalAmount);
 
+  /* ---- user-scheduled charges: explicit dates beat detection ---- */
+  const scheduled = (input.scheduled ?? []).filter((s) => s.active && s.amount > 0);
+  const scheduledNames = new Set(scheduled.map((s) => normalizeMerchant(s.name)));
+  // A detected stream that duplicates an explicit schedule is dropped — the
+  // schedule is what the user *said* happens, so it wins.
+  const detectedIncomeStreams = incomeStreams.filter((s) => !scheduledNames.has(normalizeMerchant(s.merchant)));
+  incomeStreams.length = 0;
+  incomeStreams.push(...detectedIncomeStreams);
+
   /* ---- daily discretionary: median spend/day excluding recurring payees ---- */
   const recurringKeys = new Set(recurring.items.map((i) => i.key));
   const windowStart = today - 60 * DAY;
@@ -158,7 +204,10 @@ export function buildForecast(input: ForecastInput): ForecastSummary {
 
   /* ---- projection ---- */
   const billOn = new Map<string, Cents>();
-  for (const u of recurring.upcoming) billOn.set(u.date, (billOn.get(u.date) ?? 0) + u.amount);
+  for (const u of recurring.upcoming) {
+    if (scheduledNames.has(normalizeMerchant(u.merchant))) continue; // schedule wins
+    billOn.set(u.date, (billOn.get(u.date) ?? 0) + u.amount);
+  }
   const incomeOn = new Map<string, Cents>();
   for (const s of incomeStreams) {
     let ms = parseIso(s.nextDate);
@@ -168,6 +217,25 @@ export function buildForecast(input: ForecastInput): ForecastSummary {
       ms += s.intervalDays * DAY;
     }
   }
+  // explicit scheduled occurrences land on their exact dates
+  for (const s of scheduled) {
+    const target = s.direction === "income" ? incomeOn : billOn;
+    for (const ms of scheduledOccurrences(s, today + DAY, today + horizonDays * DAY)) {
+      const iso = toIso(ms);
+      target.set(iso, (target.get(iso) ?? 0) + s.amount);
+    }
+  }
+  // repeating scheduled income also counts as an income stream (pacing/payday)
+  for (const s of scheduled) {
+    if (s.direction !== "income" || s.type === "once") continue;
+    incomeStreams.push({
+      merchant: s.name,
+      typicalAmount: s.amount,
+      intervalDays: scheduledIntervalDays(s),
+      nextDate: s.nextDate,
+    });
+  }
+  incomeStreams.sort((a, b) => b.typicalAmount - a.typicalAmount);
   const points: ForecastPoint[] = [];
   let bal = startBalance;
   let minBalance = startBalance;
@@ -195,8 +263,9 @@ export function buildForecast(input: ForecastInput): ForecastSummary {
   let pacing: IncomePacing = { nextPayday: null, daysUntilPayday: null, billsBeforePayday: 0, dailyAllowance: null };
   if (nextPaydayMs !== null && nextPaydayMs > today) {
     const daysUntil = Math.round((nextPaydayMs - today) / DAY);
+    // billOn already merges detected bills + explicit scheduled charges
     const billsBefore = sumCents(
-      recurring.upcoming.filter((u) => parseIso(u.date) < nextPaydayMs).map((u) => u.amount),
+      [...billOn.entries()].filter(([iso]) => parseIso(iso) < nextPaydayMs).map(([, amt]) => amt),
     );
     const buffer = Math.min(Math.round(startBalance * 0.1), 20_000); // keep 10% (max $200) aside
     const allowance = Math.max(0, Math.floor((startBalance - billsBefore - buffer) / Math.max(1, daysUntil)));

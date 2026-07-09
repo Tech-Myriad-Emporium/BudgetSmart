@@ -20,28 +20,32 @@ import { HoldingModal } from "./HoldingModal";
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 
 
-/** Pull live market quotes into holdings' current prices. */
+/** Pull live market quotes into holdings' current prices. Prices also sync
+ *  automatically in the background every few minutes — this shows freshness. */
 function SyncPricesButton() {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
   const sync = useMutation({
     mutationFn: () => api.refreshPrices(),
     onSuccess: (r) => {
-      setMsg(r.updated > 0 ? `✓ ${r.updated} price${r.updated === 1 ? "" : "s"} updated` : "No symbols matched the market");
+      const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      setMsg(r.updated > 0 ? `● Live · updated ${at}` : "No symbols matched the market");
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["networth"] });
     },
     onError: (e) => setMsg((e as Error).message),
   });
   useEffect(() => {
-    sync.mutate(); // auto-sync when the page opens
+    sync.mutate(); // sync immediately when the page opens…
+    const t = setInterval(() => sync.mutate(), 120_000); // …and keep it live while it's open
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <div className="row gap-sm" style={{ alignItems: "center" }}>
-      {msg && <span className="faint text-xs">{msg}</span>}
-      <button className="btn btn-sm" onClick={() => sync.mutate()} disabled={sync.isPending} title="Update holding prices from live market data">
-        {sync.isPending ? <span className="ring" /> : "⟳ Sync market prices"}
+      {msg && <span className="accent text-xs">{msg}</span>}
+      <button className="btn btn-sm" onClick={() => sync.mutate()} disabled={sync.isPending} title="Prices update automatically every few minutes — click to refresh now">
+        {sync.isPending ? <span className="ring" /> : "⟳ Refresh now"}
       </button>
     </div>
   );

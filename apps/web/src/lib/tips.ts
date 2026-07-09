@@ -46,7 +46,7 @@ export const TIPS: string[] = [
   "A big refund means you over-withheld — that was an interest-free loan to the government.",
   // family & habits
   "Kids learn money by holding it: allowances with choices beat lectures.",
-  "Chores with rewards teach that money is earned — BudgetSmart pays their wallet automatically.",
+  "Small wins compound: save your first $100 and the second $100 feels twice as easy.",
   "Couples fight less about money with a shared view and clear 'yours/mine/ours' lines.",
   "A 30-second daily check-in beats a painful monthly reckoning.",
   "Streaks work: staying under budget gets easier every consecutive day you do it.",
@@ -58,5 +58,5 @@ export const TIPS: string[] = [
   "Your financial data lives on this device — BudgetSmart works fully offline.",
   "Set a budget with one click from Insights' auto-budget suggestions — based on your real spending.",
   "The Intelligence page estimates your taxes, finds deductions and scripts your bill negotiations.",
-  "Family plans cover 5 people: invites by email, allowance wallets, chores and purchase approvals.",
+  "Family plans cover 5 people: invites by email, allowance wallets and purchase approvals.",
 ];

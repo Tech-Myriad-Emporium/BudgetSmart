@@ -11,6 +11,7 @@ import { categoriesRouter } from "./features/categories/categories.routes.js";
 import { dashboardRouter } from "./features/dashboard/dashboard.routes.js";
 import { debtRouter } from "./features/debt/debt.routes.js";
 import { familyRouter } from "./features/family/family.routes.js";
+import { masterRouter } from "./features/master/master.routes.js";
 import { forecastRouter } from "./features/forecast/forecast.routes.js";
 import { gamificationRouter } from "./features/gamification/gamification.routes.js";
 import { importRouter } from "./features/import/import.routes.js";
@@ -22,6 +23,7 @@ import { investmentsRouter } from "./features/investments/investments.routes.js"
 import { netWorthRouter } from "./features/networth/networth.routes.js";
 import { recurringRouter } from "./features/recurring/recurring.routes.js";
 import { reportsRouter } from "./features/reports/reports.routes.js";
+import { scheduleRouter } from "./features/schedule/schedule.routes.js";
 import { subscriptionRouter } from "./features/subscription/subscription.routes.js";
 import { summaryRouter } from "./features/summary/summary.routes.js";
 import { transactionsRouter } from "./features/transactions/transactions.routes.js";
@@ -55,6 +57,7 @@ export function createServer() {
   app.use("/api/subscription", subscriptionRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/schedule", scheduleRouter); // scheduled charges — base tier
 
   // Plan-gated routers. `requireAuth` sets req.userId; `requireFeature` then
   // 403s if the caller's tier doesn't grant the feature.
@@ -71,6 +74,7 @@ export function createServer() {
   app.use("/api/networth", requireAuth, requireFeature("networth"), netWorthRouter);
   app.use("/api/gamification", requireAuth, requireFeature("gamification"), gamificationRouter);
   app.use("/api/family", requireAuth, requireFeature("family"), familyRouter);
+  app.use("/api/master", requireAuth, requireFeature("family"), masterRouter);
 
   // Serve the built web UI from the same origin (used by the packaged desktop app),
   // so the frontend's relative /api calls work without CORS. Enabled when WEB_DIST is set.

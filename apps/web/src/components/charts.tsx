@@ -21,7 +21,7 @@ export function SpendDonut({ data, total }: { data: CategorySpend[]; total: numb
   return (
     <div className="row" style={{ gap: 20, alignItems: "center", flexWrap: "wrap" }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flex: "none" }}>
-        <circle cx={cx} cy={cx} r={r} fill="none" stroke="#161616" strokeWidth={stroke} />
+        <circle cx={cx} cy={cx} r={r} fill="none" strokeWidth={stroke} style={{ stroke: "var(--track)" }} />
         <g transform={`rotate(-90 ${cx} ${cx})`}>
           {segments.map((s, i) => (
             <circle
@@ -38,10 +38,10 @@ export function SpendDonut({ data, total }: { data: CategorySpend[]; total: numb
             />
           ))}
         </g>
-        <text x={cx} y={cx - 4} textAnchor="middle" className="num" fill="#fff" fontSize="18" fontWeight="600">
+        <text x={cx} y={cx - 4} textAnchor="middle" className="num" fontSize="18" fontWeight="600" style={{ fill: "var(--fg)" }}>
           {formatMoneyCompact(total)}
         </text>
-        <text x={cx} y={cx + 14} textAnchor="middle" fill="#5a5a5a" fontSize="9" letterSpacing="1">
+        <text x={cx} y={cx + 14} textAnchor="middle" fontSize="9" letterSpacing="1" style={{ fill: "var(--fg-faint)" }}>
           SPENT
         </text>
       </svg>
@@ -74,14 +74,14 @@ export function CashflowBars({ income, expenses }: { income: number; expenses: n
         <span className="num text-sm">{formatMoneyCompact(value)}</span>
       </div>
       <div className="progress" style={{ height: 10 }}>
-        <span style={{ width: `${(value / max) * 100}%`, background: color, boxShadow: `0 0 12px ${color}66` }} />
+        <span style={{ width: `${(value / max) * 100}%`, background: color, boxShadow: "none" }} />
       </div>
     </div>
   );
   return (
     <div className="col gap-lg">
-      {bar(income, "#00FF41", "Income")}
-      {bar(expenses, "#FF0033", "Expenses")}
+      {bar(income, "var(--accent)", "Income")}
+      {bar(expenses, "var(--error)", "Expenses")}
     </div>
   );
 }

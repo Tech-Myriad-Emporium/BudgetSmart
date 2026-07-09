@@ -1,8 +1,20 @@
-import { TIERS, formatMoney, type Tier } from "@budgetsmart/shared";
-import { useEffect, useState } from "react";
+import {
+  TIERS,
+  formatMoney,
+  type Tier,
+  PLAN_FEATURES,
+  quotePlan,
+  MIN_CUSTOM_SEATS,
+  MIN_ENTERPRISE_SEATS,
+} from "@budgetsmart/shared";
+import { useEffect, useMemo, useState } from "react";
 import { LanguagePicker, useI18n } from "./i18n";
 
+const API = "https://budgetsmart-api.budgetsmart.workers.dev";
+
 const DOMAIN = "budgetsmarttme.com";
+// Bump to force a new bundle hash (rotates the asset URL past any bad edge cache).
+const SITE_BUILD = "2026-07-08a";
 
 const FEATURE_CARDS = [
   { icon: "◫", k: "feat1" },
@@ -62,7 +74,7 @@ export function App() {
       <Hero />
       <Features />
       <Pricing />
-      <CustomBuilder />
+      <CustomTeaser />
       <Downloads />
       <Status />
       <Faq />
@@ -79,16 +91,16 @@ function Brand() {
   );
 }
 
-function Nav() {
+export function Nav() {
   const { t } = useI18n();
   return (
     <nav className="nav">
       <Brand />
       <div className="nav-links">
-        <a href="#features">{t("nav.features")}</a>
-        <a href="#pricing">{t("nav.pricing")}</a>
-        <a href="#download">{t("nav.download")}</a>
-        <a href="#status">{t("nav.status")}</a>
+        <a href="/#features">{t("nav.features")}</a>
+        <a href="/#pricing">{t("nav.pricing")}</a>
+        <a href="/#download">{t("nav.download")}</a>
+        <a href="/help">{t("nav.help")}</a>
         <LanguagePicker />
         <a className="btn nav-icon-btn" href="/account?tab=notifications" title={t("status.notif")} aria-label={t("status.notif")}>🔔</a>
         <a className="btn" href="/account" style={{ padding: "8px 16px" }}>{t("nav.account")}</a>
@@ -208,7 +220,7 @@ function Pricing() {
                         <li><span className="check">✓</span> Annual billing only</li>
                         <li><span className="check">✓</span> Set up by contacting us</li>
                       </ul>
-                      <a className="btn" href="#custom">Build your plan ↓</a>
+                      <a className="btn" href="/build">Build your plan →</a>
                     </div>
                     <div className="plan popular">
                       <span className="tag">30+ SEATS</span>
@@ -221,7 +233,7 @@ function Pricing() {
                         <li><span className="check">✓</span> Central admin & audit trail</li>
                         <li><span className="check">✓</span> Annual billing only</li>
                       </ul>
-                      <a className="btn btn-primary" href="#custom">Build your plan ↓</a>
+                      <a className="btn btn-primary" href="/build">Build your plan →</a>
                     </div>
                   </>
                 )}
@@ -278,49 +290,55 @@ function PlanCard({ tier }: { tier: Tier }) {
 }
 
 /* ------------------------------------------------------------------ *
- * Custom & Enterprise plan builder — every feature has a price point.
- * Algorithm: per-person/year = max($75, sum of picked items);
- * total = per-person x seats + $100 per started block of 30 seats.
- * Custom needs 6+ seats; 30+ seats = Enterprise. Annual only.
+ * Custom & Enterprise. The landing shows a teaser; the actual builder lives
+ * on its own /build page (BuildPlanPage) with step pricing + order submission.
  * ------------------------------------------------------------------ */
 const CONTACT_EMAIL = "budgetsmart.techmyriademporium@gmail.com";
 
-interface AlacarteItem { key: string; label: string; price: number; required?: boolean }
-const ALACARTE: AlacarteItem[] = [
-  { key: "core", label: "Core money management — accounts, transactions, budgets, goals, debt, CSV export", price: 25, required: true },
-  { key: "import", label: "Bank statement import (CSV/OFX/QIF) + AI auto-categorization", price: 12 },
-  { key: "recurring", label: "Subscription detection & price-creep alerts", price: 10 },
-  { key: "insights", label: "Smart cleanup — dedupe, refunds, auto-budget, overspending alerts", price: 12 },
-  { key: "reports", label: "Reports & trends + weekly/monthly email recaps", price: 10 },
-  { key: "calendar", label: "Financial calendar (bills, paychecks, milestones)", price: 6 },
-  { key: "investments", label: "Investment tracking & growth projections", price: 12 },
-  { key: "networth", label: "Net worth tracking with history", price: 8 },
-  { key: "forecast", label: "90-day cashflow forecasting, income pacing & sinking funds", price: 14 },
-  { key: "ai", label: "AI advisor, savings optimizer & financial health score", price: 12 },
-  { key: "tax", label: "Tax intelligence — projections, quarterly estimates, deduction finder", price: 20 },
-  { key: "intelligence", label: "Debt/investment/life intelligence + AI negotiation scripts", price: 15 },
-  { key: "audit", label: "Audit trail & compliance logging", price: 10 },
-  { key: "gamification", label: "Rewards & gamification", price: 6 },
-  { key: "team", label: "Team management — wallets, chores, approvals, shared goals", price: 12 },
-  { key: "priority", label: "Priority support", price: 8 },
-];
-const PER_PERSON_FLOOR = 75;
-const BLOCK_FEE = 100; // per started block of 30 seats
-const MIN_CUSTOM = 6;
-const MIN_ENTERPRISE = 30;
+function CustomTeaser() {
+  return (
+    <section id="custom">
+      <div className="wrap">
+        <div className="eyebrow">// custom &amp; enterprise</div>
+        <h2 className="section-title">Bring it to your whole team.</h2>
+        <p className="section-sub">
+          Teams of {MIN_CUSTOM_SEATS}+ pick capabilities à la carte with simple step pricing —
+          the more you add, the higher the band. {MIN_ENTERPRISE_SEATS}+ seats unlocks Enterprise with
+          full customization and priority support. Build a plan, get a receipt, pay, and redeem a code
+          that unlocks and shares your plan by email.
+        </p>
+        <div className="hero-cta" style={{ marginTop: 20 }}>
+          <a className="btn btn-primary" href="/build">Build your team plan →</a>
+          <a className="btn" href="/account">Redeem a code</a>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-function CustomBuilder() {
-  const [people, setPeople] = useState(MIN_CUSTOM);
+/* ------------------------------------------------------------------ *
+ * /build — the standalone Custom/Enterprise plan builder.
+ * Step pricing: the per-person band is set by how many features you pick.
+ * Submitting posts an order to the API, which emails a priced receipt; once
+ * paid, a redeemable code is issued to unlock and share the plan.
+ * ------------------------------------------------------------------ */
+export function BuildPlanPage() {
+  const [people, setPeople] = useState(MIN_CUSTOM_SEATS);
   const [picked, setPicked] = useState<Set<string>>(
     () => new Set(["core", "import", "recurring", "insights", "reports", "team"]),
   );
-  const enterprise = people >= MIN_ENTERPRISE;
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ref: string; total: number } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const itemSum = ALACARTE.filter((i) => i.required || picked.has(i.key)).reduce((s, i) => s + i.price, 0);
-  const perPerson = Math.max(PER_PERSON_FLOOR, itemSum);
-  const blocks = Math.ceil(people / 30);
-  const total = perPerson * people + BLOCK_FEE * blocks;
-  const floored = itemSum < PER_PERSON_FLOOR;
+  const itemKeys = useMemo(
+    () => PLAN_FEATURES.filter((f) => f.required || picked.has(f.key)).map((f) => f.key),
+    [picked],
+  );
+  const quote = quotePlan(people, itemKeys.length);
+  const enterprise = quote.planType === "enterprise";
 
   function toggle(key: string) {
     setPicked((prev) => {
@@ -331,86 +349,118 @@ function CustomBuilder() {
     });
   }
 
-  const chosen = ALACARTE.filter((i) => i.required || picked.has(i.key));
-  const bodyLines = [
-    "Hi BudgetSmart team,",
-    "",
-    `We'd like a ${enterprise ? "Enterprise" : "Custom"} plan.`,
-    "",
-    `Seats: ${people}`,
-    "",
-    "Features:",
-    ...chosen.map((i) => `- ${i.label} ($${i.price}/person/yr)`),
-    "",
-    `Quoted: $${perPerson}/person/yr x ${people} seats + $${BLOCK_FEE} x ${blocks} = $${total.toLocaleString()}/yr (annual billing)`,
-    "",
-  ];
-  const mailto =
-    `mailto:${CONTACT_EMAIL}` +
-    `?subject=${encodeURIComponent(`${enterprise ? "Enterprise" : "Custom"} BudgetSmart plan — ${people} people`)}` +
-    `&body=${encodeURIComponent(bodyLines.join("\r\n"))}`;
+  async function submit() {
+    setErr(null);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setErr("Enter a valid email so we can send your receipt.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seats: people, items: itemKeys, name, email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // Stripe is live → send them straight to secure checkout. The pay link is
+        // also in their email, so procurement can forward it to whoever pays.
+        if (data.payUrl) { window.location.href = data.payUrl; return; }
+        setResult({ ref: data.ref, total: data.quote?.total ?? quote.total });
+      } else setErr(data.error ?? "Couldn't submit your order — try again in a moment.");
+    } catch {
+      setErr("Network error — check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <section id="custom">
-      <div className="wrap">
-        <div className="eyebrow">// custom &amp; enterprise</div>
-        <h2 className="section-title">Build your own plan.</h2>
-        <p className="section-sub">
-          Teams of {MIN_CUSTOM}+ pick features à la carte; {MIN_ENTERPRISE}+ seats unlocks Enterprise with full customization.
-          Annual billing only — set up by email, not checkout.
-        </p>
+    <>
+      <Nav />
+      <section id="build" style={{ paddingTop: 40 }}>
+        <div className="wrap">
+          <div className="eyebrow">// custom &amp; enterprise</div>
+          <h1 className="section-title">Build your team plan.</h1>
+          <p className="section-sub">
+            Pick the capabilities your team needs — the more you add, the higher the price band.
+            Custom starts at {MIN_CUSTOM_SEATS} people; {MIN_ENTERPRISE_SEATS}+ unlocks Enterprise.
+            Annual only. Submit and we email a receipt within 24 hours — pay it and you get a
+            redeemable code to unlock and share your plan.
+          </p>
 
-        <div className="builder">
-          <div className="builder-items">
-            {ALACARTE.map((item) => {
-              const on = item.required || picked.has(item.key);
-              return (
-                <label key={item.key} className={`builder-item ${on ? "on" : ""} ${item.required ? "req" : ""}`}>
+          {result ? (
+            <div className="card" style={{ marginTop: 24, maxWidth: 640 }}>
+              <div className="feature-icon">🧾</div>
+              <h3>Order {result.ref} received</h3>
+              <p>
+                We've emailed your order to <strong>{email}</strong> for{" "}
+                <span className="accent">${result.total.toLocaleString()}/yr</span>. Reply to that email to arrange payment —
+                the moment it clears, your <strong>redemption code</strong> is emailed automatically. Redeem it at{" "}
+                <a className="accent" href="/account">your account</a> to unlock the plan, then invite your team by email.
+              </p>
+              <p className="faint" style={{ fontSize: 13, marginTop: 8 }}>
+                Didn't get the email? Check spam/junk — it comes from {CONTACT_EMAIL}.
+              </p>
+              <a className="btn btn-primary" href="/account" style={{ marginTop: 12 }}>Go to your account</a>
+            </div>
+          ) : (
+            <div className="builder">
+              <div className="builder-items">
+                {PLAN_FEATURES.map((item) => {
+                  const on = item.required || picked.has(item.key);
+                  return (
+                    <label key={item.key} className={`builder-item ${on ? "on" : ""} ${item.required ? "req" : ""}`}>
+                      <input type="checkbox" checked={on} disabled={item.required} onChange={() => toggle(item.key)} />
+                      <span className="builder-label">{item.label}{item.required ? " (included)" : ""}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="builder-quote">
+                <div className="builder-mode mono">{enterprise ? "◆ ENTERPRISE" : "◇ CUSTOM"}</div>
+                <label className="builder-people">
+                  People
                   <input
-                    type="checkbox"
-                    checked={on}
-                    disabled={item.required}
-                    onChange={() => toggle(item.key)}
+                    type="number"
+                    min={MIN_CUSTOM_SEATS}
+                    value={people}
+                    onChange={(e) => setPeople(Math.max(MIN_CUSTOM_SEATS, Math.floor(Number(e.target.value) || MIN_CUSTOM_SEATS)))}
                   />
-                  <span className="builder-label">{item.label}{item.required ? " (included)" : ""}</span>
-                  <span className="builder-price mono">${item.price}<small>/person/yr</small></span>
                 </label>
-              );
-            })}
-          </div>
+                <div className="builder-line"><span>Features chosen</span><span className="mono">{quote.itemCount}</span></div>
+                <div className="builder-line"><span>{quote.bandLabel}</span><span className="mono">${quote.perPersonYear}/person/yr</span></div>
+                <div className="builder-line"><span>Seats</span><span className="mono">× {people}</span></div>
+                <div className="builder-line"><span>Setup &amp; support ($100 / 30 seats)</span><span className="mono">+ ${quote.blockFee}</span></div>
+                <div className="builder-total">
+                  <span>Annual total</span>
+                  <span className="mono accent">${quote.total.toLocaleString()}</span>
+                </div>
+                {!enterprise && people < MIN_ENTERPRISE_SEATS && (
+                  <div className="builder-note">Enterprise (full customization, priority support) starts at {MIN_ENTERPRISE_SEATS} seats.</div>
+                )}
+                <input className="acct-input" style={{ marginTop: 12 }} placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="acct-input" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 10 }} onClick={submit} disabled={busy}>
+                  {busy ? "Starting checkout…" : "Continue to secure checkout →"}
+                </button>
+                {err && <div className="builder-note" style={{ color: "#ff5c5c" }}>{err}</div>}
+                <div className="builder-note" style={{ marginTop: 8 }}>
+                  Secure checkout by Stripe. The moment payment clears, your redeemable code is emailed instantly. Annual only.
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="builder-quote">
-            <div className="builder-mode mono">{enterprise ? "◆ ENTERPRISE" : "◇ CUSTOM"}</div>
-            <label className="builder-people">
-              People
-              <input
-                type="number"
-                min={MIN_CUSTOM}
-                value={people}
-                onChange={(e) => setPeople(Math.max(MIN_CUSTOM, Math.floor(Number(e.target.value) || MIN_CUSTOM)))}
-              />
-            </label>
-            <div className="builder-line"><span>Per person / year</span><span className="mono">${perPerson}</span></div>
-            {floored && <div className="builder-note">$75/person/yr minimum applied</div>}
-            <div className="builder-line"><span>Seats</span><span className="mono">× {people}</span></div>
-            <div className="builder-line"><span>Service fee ($100 / 30 seats)</span><span className="mono">+ ${BLOCK_FEE * blocks}</span></div>
-            <div className="builder-total">
-              <span>Annual total</span>
-              <span className="mono accent">${total.toLocaleString()}</span>
-            </div>
-            {!enterprise && people < MIN_ENTERPRISE && (
-              <div className="builder-note">Enterprise (full customization, priority support) starts at {MIN_ENTERPRISE} seats.</div>
-            )}
-            <a className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} href={mailto}>
-              ✉ Request this plan
-            </a>
-            <div className="builder-note" style={{ marginTop: 8 }}>
-              Opens an email to {CONTACT_EMAIL} with your build attached. Annual only.
-            </div>
-          </div>
+          <p className="section-sub" style={{ marginTop: 28, fontSize: 14 }}>
+            ← <a className="accent" href="/">Back to BudgetSmart</a>
+          </p>
         </div>
-      </div>
-    </section>
+      </section>
+      <Footer />
+    </>
   );
 }
 
@@ -445,7 +495,7 @@ function Downloads() {
         <div className="eyebrow">{t("dl.eyebrow")}</div>
         <h2 className="section-title">{t("dl.title")}</h2>
         <p className="section-sub">{t("dl.sub")}</p>
-        <p className="section-sub" style={{ fontSize: 13, marginTop: 2 }}><span className="accent mono">Latest: Beta v1.2.1</span></p>
+        <p className="section-sub" style={{ fontSize: 13, marginTop: 2 }}><span className="accent mono">Latest: Beta v1.2.3</span></p>
         <div className="dl-grid">
           {platforms.map((p) => (
             <div className="dl" key={p.os + p.meta}>
@@ -520,6 +570,9 @@ function Faq() {
 }
 
 const LEARN_LINKS = [
+  { href: "/help", label: "Help & guides" },
+  { href: "/terms", label: "Terms of Service" },
+  { href: "/privacy", label: "Privacy Policy" },
   { href: "/budgeting-software/", label: "Budgeting software" },
   { href: "/mint-alternative/", label: "Mint alternative" },
   { href: "/ynab-alternative/", label: "YNAB alternative" },
@@ -529,18 +582,19 @@ const LEARN_LINKS = [
   { href: "/tme/", label: "About TME" },
 ];
 
-function Footer() {
+export function Footer() {
   const { t } = useI18n();
   return (
     <footer className="footer">
       <div className="wrap">
         <Brand />
-        <div className="faint">© {new Date().getFullYear()} BudgetSmart · Tech Myriad Emporium (TME) · {DOMAIN}</div>
+        <div className="faint" data-build={SITE_BUILD}>© {new Date().getFullYear()} BudgetSmart · Tech Myriad Emporium (TME) · {DOMAIN}</div>
         <div className="muted" style={{ display: "flex", gap: 18 }}>
-          <a href="#features">{t("nav.features")}</a>
-          <a href="#pricing">{t("nav.pricing")}</a>
-          <a href="#download">{t("nav.download")}</a>
-          <a href="#status">{t("nav.status")}</a>
+          <a href="/#features">{t("nav.features")}</a>
+          <a href="/#pricing">{t("nav.pricing")}</a>
+          <a href="/#download">{t("nav.download")}</a>
+          <a href="/help">{t("nav.help")}</a>
+          <a href="/#status">{t("nav.status")}</a>
         </div>
       </div>
       <div className="wrap footer-learn">

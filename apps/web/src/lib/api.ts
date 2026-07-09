@@ -10,7 +10,6 @@ import type {
   Entitlements,
   FamilyOverview,
   Feature,
-  Chore,
   CsvMapping,
   ForecastSummary,
   GamificationState,
@@ -29,6 +28,8 @@ import type {
   RecurringSummary,
   ReportData,
   SafeToSpend,
+  ScheduledCharge,
+  ScheduledChargeInput,
   Tier,
   Transaction,
   TransactionType,
@@ -200,6 +201,17 @@ export const api = {
     request<{ debt: Debt }>(`/debts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deleteDebt: (id: string) => request<void>(`/debts/${id}`, { method: "DELETE" }),
 
+  // master overview (plan owner: every member's snapshot)
+  masterOverview: () => request<any>("/master"),
+
+  // scheduled charges
+  schedule: () => request<{ charges: ScheduledCharge[] }>("/schedule"),
+  createScheduledCharge: (input: ScheduledChargeInput) =>
+    request<{ charge: ScheduledCharge }>("/schedule", { method: "POST", body: JSON.stringify(input) }),
+  updateScheduledCharge: (id: string, input: Partial<ScheduledChargeInput>) =>
+    request<{ charge: ScheduledCharge }>(`/schedule/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  deleteScheduledCharge: (id: string) => request<void>(`/schedule/${id}`, { method: "DELETE" }),
+
   // investments
   investments: () => request<{ portfolio: Portfolio }>("/investments"),
   refreshPrices: () => request<{ updated: number; skipped: number }>("/investments/refresh-prices", { method: "POST" }),
@@ -249,12 +261,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ memberId, amount }),
     }),
-  familyChores: () => request<{ chores: Chore[] }>("/family/chores"),
-  addChore: (input: { memberId: string; name: string; reward: number; repeats: boolean }) =>
-    request<{ chores: Chore[] }>("/family/chores", { method: "POST", body: JSON.stringify(input) }),
-  completeChore: (id: string) =>
-    request<{ chores: Chore[]; overview: FamilyOverview }>(`/family/chores/${id}/complete`, { method: "POST" }),
-  removeChore: (id: string) => request<{ chores: Chore[] }>(`/family/chores/${id}`, { method: "DELETE" }),
   familyRequests: () => request<{ requests: PurchaseRequest[] }>("/family/requests"),
   addFamilyRequest: (input: { memberId: string; title: string; amount: number; note?: string | null }) =>
     request<{ requests: PurchaseRequest[] }>("/family/requests", {

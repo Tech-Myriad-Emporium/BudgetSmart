@@ -13,6 +13,7 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   FINNHUB_KEY?: string;
+  SECURITY_ALERT_EMAIL?: string; // where critical security alerts go (defaults to GMAIL_USER)
   // vars
   APP_URL: string;
   EMAIL_FROM: string;
